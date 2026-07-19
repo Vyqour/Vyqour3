@@ -1,0 +1,85 @@
+import { ConfigService } from '@nestjs/config';
+import { QikinkJobType, Prisma } from '@prisma/client';
+import { PrismaService } from '../../../prisma/prisma.service';
+export declare class QikinkJobQueue {
+    private readonly prisma;
+    private readonly config;
+    private readonly logger;
+    private readonly workerId;
+    constructor(prisma: PrismaService, config: ConfigService);
+    maxAttempts(): number;
+    enqueue(type: QikinkJobType, opts?: {
+        orderId?: string;
+        payload?: Prisma.InputJsonValue;
+        runAfter?: Date;
+        maxAttempts?: number;
+    }): Promise<{
+        error: string | null;
+        id: string;
+        status: import(".prisma/client").$Enums.QikinkJobStatus;
+        createdAt: Date;
+        updatedAt: Date;
+        result: Prisma.JsonValue | null;
+        type: import(".prisma/client").$Enums.QikinkJobType;
+        orderId: string | null;
+        payload: Prisma.JsonValue | null;
+        attempts: number;
+        maxAttempts: number;
+        runAfter: Date;
+        lockedAt: Date | null;
+        lockedBy: string | null;
+        completedAt: Date | null;
+    }>;
+    claimNext(types?: QikinkJobType[]): Promise<{
+        error: string | null;
+        id: string;
+        status: import(".prisma/client").$Enums.QikinkJobStatus;
+        createdAt: Date;
+        updatedAt: Date;
+        result: Prisma.JsonValue | null;
+        type: import(".prisma/client").$Enums.QikinkJobType;
+        orderId: string | null;
+        payload: Prisma.JsonValue | null;
+        attempts: number;
+        maxAttempts: number;
+        runAfter: Date;
+        lockedAt: Date | null;
+        lockedBy: string | null;
+        completedAt: Date | null;
+    } | null>;
+    complete(jobId: string, result?: Prisma.InputJsonValue): Promise<{
+        error: string | null;
+        id: string;
+        status: import(".prisma/client").$Enums.QikinkJobStatus;
+        createdAt: Date;
+        updatedAt: Date;
+        result: Prisma.JsonValue | null;
+        type: import(".prisma/client").$Enums.QikinkJobType;
+        orderId: string | null;
+        payload: Prisma.JsonValue | null;
+        attempts: number;
+        maxAttempts: number;
+        runAfter: Date;
+        lockedAt: Date | null;
+        lockedBy: string | null;
+        completedAt: Date | null;
+    }>;
+    fail(jobId: string, error: string, attempts: number, maxAttempts: number): Promise<{
+        error: string | null;
+        id: string;
+        status: import(".prisma/client").$Enums.QikinkJobStatus;
+        createdAt: Date;
+        updatedAt: Date;
+        result: Prisma.JsonValue | null;
+        type: import(".prisma/client").$Enums.QikinkJobType;
+        orderId: string | null;
+        payload: Prisma.JsonValue | null;
+        attempts: number;
+        maxAttempts: number;
+        runAfter: Date;
+        lockedAt: Date | null;
+        lockedBy: string | null;
+        completedAt: Date | null;
+    }>;
+    requeueDead(orderId: string): Promise<Prisma.BatchPayload>;
+}
