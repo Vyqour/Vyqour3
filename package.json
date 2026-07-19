@@ -1,0 +1,30 @@
+{
+  "name": "vyqour",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=@vyqour/web",
+    "dev:api": "npm run start:dev --workspace=@vyqour/api",
+    "build": "npm run build --workspaces --if-present",
+    "build:web": "npm run build --workspace=@vyqour/web",
+    "build:api": "npm run build --workspace=@vyqour/api",
+    "lint": "npm run lint --workspaces --if-present",
+    "db:up": "docker compose up -d",
+    "db:generate": "npm run prisma:generate --workspace=@vyqour/api",
+    "db:migrate": "npm run prisma:migrate --workspace=@vyqour/api",
+    "db:seed": "npm run prisma:seed --workspace=@vyqour/api",
+    "db:studio": "npm run prisma:studio --workspace=@vyqour/api",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
