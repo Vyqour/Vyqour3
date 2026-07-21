@@ -1,10 +1,38 @@
+import { parseCorsOrigins } from '../common/utils/cors.util';
+
+function buildCorsOrigins(): string[] {
+  const fromEnv = parseCorsOrigins(process.env.CORS_ORIGINS);
+  const webUrl = (process.env.WEB_URL || '').trim().replace(/\/+$/, '');
+  const appUrl = (process.env.APP_URL || '').trim().replace(/\/+$/, '');
+  const defaults = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+
+  const merged = [...fromEnv];
+  if (webUrl && !merged.includes(webUrl)) merged.push(webUrl);
+  if (appUrl && !merged.includes(appUrl)) merged.push(appUrl);
+
+  for (const d of defaults) {
+    if (!merged.includes(d)) merged.push(d);
+  }
+
+  // De-dupe case-insensitively while preserving first occurrence
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const o of merged) {
+    const key = o.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(o);
+  }
+  return unique;
+}
+
 export default () => ({
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '4000', 10),
   apiPrefix: process.env.API_PREFIX || 'api/v1',
   appUrl: process.env.APP_URL || 'http://localhost:4000',
   webUrl: process.env.WEB_URL || 'http://localhost:3000',
-  corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:3000').split(','),
+  corsOrigins: buildCorsOrigins(),
   databaseUrl: process.env.DATABASE_URL,
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
   jwt: {
@@ -44,7 +72,8 @@ export default () => ({
     sandbox: (process.env.QIKINK_SANDBOX || 'true').toLowerCase() === 'true',
     clientId: process.env.QIKINK_CLIENT_ID || '',
     clientSecret: process.env.QIKINK_CLIENT_SECRET || '',
-    sandboxSecret: process.env.QIKINK_SANDBOX_SECRET || process.env.QIKINK_CLIENT_SECRET || '',
+    sandboxSecret:
+      process.env.QIKINK_SANDBOX_SECRET || process.env.QIKINK_CLIENT_SECRET || '',
     baseUrl:
       process.env.QIKINK_BASE_URL ||
       ((process.env.QIKINK_SANDBOX || 'true').toLowerCase() === 'true'
@@ -55,7 +84,8 @@ export default () => ({
     autoSubmit: (process.env.QIKINK_AUTO_SUBMIT || 'true').toLowerCase() === 'true',
     maxAttempts: parseInt(process.env.QIKINK_MAX_ATTEMPTS || '8', 10),
     workerIntervalMs: parseInt(process.env.QIKINK_WORKER_INTERVAL_MS || '15000', 10),
-    statusPollEnabled: (process.env.QIKINK_STATUS_POLL_ENABLED || 'true').toLowerCase() === 'true',
+    statusPollEnabled:
+      (process.env.QIKINK_STATUS_POLL_ENABLED || 'true').toLowerCase() === 'true',
     statusEndpoint: process.env.QIKINK_STATUS_ENDPOINT || '/api/order/status',
     productsEndpoint: process.env.QIKINK_PRODUCTS_ENDPOINT || '/api/products',
   },
