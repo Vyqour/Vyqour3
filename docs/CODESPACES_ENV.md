@@ -1,49 +1,58 @@
-# Codespaces environment URLs
+# Codespaces environment + login fix
 
 Current Codespace: `supreme-telegram-6v6pw6w79jghx74`
 
-| Service  | Port | URL |
-|----------|------|-----|
+| Service  | Port | Public URL |
+|----------|------|------------|
 | Frontend | 3000 | https://supreme-telegram-6v6pw6w79jghx74-3000.app.github.dev |
-| API      | 4000 | https://supreme-telegram-6v6pw6w79jghx74-4000.app.github.dev |
+| API      | 4000 | http://127.0.0.1:4000 inside the Codespace (proxied by Next) |
 
-## One-time setup in the Codespace terminal
+## Why login showed "Failed to fetch"
+
+1. Browser called the **public** `-4000` URL (cross-origin).
+2. Port 4000 was often **down (502)** or behind the tunnel → `fetch` failed.
+3. Even when up, CORS/preflight across Codespace hosts broke credentialed POSTs.
+
+## Fix (already in repo)
+
+- Browser uses **same-origin** `NEXT_PUBLIC_API_URL=/api/v1`
+- `next.config.ts` rewrites `/api/v1/*` → `INTERNAL_API_URL` (`http://127.0.0.1:4000`)
+- Nest CORS still allows localhost + `*.app.github.dev` for direct API access
+
+## Setup
 
 ```bash
-# 1. Pull latest (CORS + env fixes)
 git pull origin main
 
-# 2. Web env (Next.js reads .env.local)
-cp apps/web/.env.example apps/web/.env.local
+# Web
+cp apps/web/.env.local.codespaces apps/web/.env.local
+# or: cp apps/web/.env.example apps/web/.env.local
 
-# 3. API env (NestJS reads .env) — keep secrets; only overwrite URL keys if needed
-# If you already have apps/api/.env, update these keys instead of full overwrite:
-#   APP_URL, WEB_URL, CORS_ORIGINS, GOOGLE_CALLBACK_URL
-cp apps/api/.env.example apps/api/.env   # only if you do not already have .env
+# API — keep your secrets; ensure Nest listens on 4000
+# apps/api/.env must exist with DATABASE_URL + JWT secrets
 
-# 4. Ports tab → set 3000 and 4000 to Public
-
-# 5. Restart
-# terminal A
+# Terminal A — API MUST stay running
 cd apps/api && npm run start:dev
-# terminal B
+
+# Terminal B — restart web after env change
 cd apps/web && npm run dev
 ```
 
-## Required web variables
+## Verify
 
-```env
-NEXT_PUBLIC_API_URL=https://supreme-telegram-6v6pw6w79jghx74-4000.app.github.dev/api/v1
-NEXT_PUBLIC_SITE_URL=https://supreme-telegram-6v6pw6w79jghx74-3000.app.github.dev
+```bash
+# API healthy inside Codespace
+curl -sS http://127.0.0.1:4000/api/v1/health
+
+# Same-origin proxy via Next
+curl -sS http://127.0.0.1:3000/api/v1/health
+
+# Login
+curl -sS -X POST http://127.0.0.1:3000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@vyqour.com","password":"VyqourAdmin@2026"}'
 ```
 
-## Required API variables
+If health on `:4000` fails, login will always show Failed to fetch / API not reachable — start Nest first.
 
-```env
-APP_URL=https://supreme-telegram-6v6pw6w79jghx74-4000.app.github.dev
-WEB_URL=https://supreme-telegram-6v6pw6w79jghx74-3000.app.github.dev
-CORS_ORIGINS=https://supreme-telegram-6v6pw6w79jghx74-3000.app.github.dev,http://localhost:3000,http://127.0.0.1:3000
-GOOGLE_CALLBACK_URL=https://supreme-telegram-6v6pw6w79jghx74-4000.app.github.dev/api/v1/auth/google/callback
-```
-
-If the Codespace name changes, replace `supreme-telegram-6v6pw6w79jghx74` in every URL.
+Ports: set **3000** Public for the browser. Port **4000** can stay private when using the proxy.

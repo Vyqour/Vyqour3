@@ -1,6 +1,40 @@
 import { getSessionId } from './utils';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+/**
+ * Resolve API base URL.
+ * - Browser: always same-origin `/api/v1` (Next.js rewrites → Nest).
+ *   Avoids Codespaces cross-origin CORS / private tunnel failures.
+ * - Server (RSC): use INTERNAL_API_URL or NEXT_PUBLIC_API_URL or localhost.
+ */
+function resolveApiUrl(): string {
+  if (typeof window !== 'undefined') {
+    // Prefer explicit public URL only when it is already same-origin
+    const pub = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+    if (pub) {
+      try {
+        const u = new URL(pub, window.location.origin);
+        if (u.origin === window.location.origin) {
+          return `${u.pathname.replace(/\/+$/, '')}` || '/api/v1';
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+    return '/api/v1';
+  }
+
+  const internal = (process.env.INTERNAL_API_URL || '').replace(/\/+$/, '');
+  if (internal) {
+    return internal.endsWith('/api/v1') ? internal : `${internal}/api/v1`;
+  }
+
+  return (process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api/v1').replace(
+    /\/+$/,
+    '',
+  );
+}
+
+const API_URL = resolveApiUrl();
 
 type RequestOptions = RequestInit & {
   auth?: boolean;
@@ -33,6 +67,16 @@ export function setTokens(access?: string | null, refresh?: string | null) {
 
 export function clearTokens() {
   setTokens(null, null);
+}
+
+function networkErrorMessage(err: unknown): string {
+  const base =
+    'Cannot reach the API (Failed to fetch). Make sure NestJS is running on port 4000, then restart Next.js.';
+  if (err instanceof TypeError) {
+    return `${base} Details: ${err.message}`;
+  }
+  if (err instanceof Error) return err.message;
+  return base;
 }
 
 async function refreshAccessToken(): Promise<string | null> {
@@ -74,22 +118,41 @@ export async function api<T = unknown>(path: string, options: RequestOptions = {
     if (sid) h.set('x-session-id', sid);
   }
 
-  let res = await fetch(`${API_URL}${path}`, {
-    ...rest,
-    headers: h,
-    credentials: 'include',
-  });
+  const url = `${API_URL}${path.startsWith('/') ? path : `/${path}`}`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...rest,
+      headers: h,
+      credentials: 'include',
+    });
+  } catch (err) {
+    throw new ApiError(networkErrorMessage(err), 0, err);
+  }
 
   if (res.status === 401 && auth !== false) {
     const newToken = await refreshAccessToken();
     if (newToken) {
       h.set('Authorization', `Bearer ${newToken}`);
-      res = await fetch(`${API_URL}${path}`, {
-        ...rest,
-        headers: h,
-        credentials: 'include',
-      });
+      try {
+        res = await fetch(url, {
+          ...rest,
+          headers: h,
+          credentials: 'include',
+        });
+      } catch (err) {
+        throw new ApiError(networkErrorMessage(err), 0, err);
+      }
     }
+  }
+
+  // Next rewrite target down → 502/504 from proxy
+  if (res.status === 502 || res.status === 503 || res.status === 504) {
+    throw new ApiError(
+      `API is not reachable (HTTP ${res.status}). Start the NestJS server on port 4000 (apps/api), keep it running, then retry login.`,
+      res.status,
+    );
   }
 
   const text = await res.text();
@@ -119,16 +182,18 @@ export async function api<T = unknown>(path: string, options: RequestOptions = {
 }
 
 export const apiClient = {
-  get: <T>(path: string, opts?: RequestOptions) => api<T>(path, { ...opts, method: 'GET' }),
-  post: <T>(path: string, body?: unknown, opts?: RequestOptions) =>
+  get: <T = unknown>(path: string, opts?: RequestOptions) =>
+    api<T>(path, { ...opts, method: 'GET' }),
+  post: <T = unknown>(path: string, body?: unknown, opts?: RequestOptions) =>
     api<T>(path, {
       ...opts,
       method: 'POST',
       body: body instanceof FormData ? body : JSON.stringify(body ?? {}),
     }),
-  patch: <T>(path: string, body?: unknown, opts?: RequestOptions) =>
+  patch: <T = unknown>(path: string, body?: unknown, opts?: RequestOptions) =>
     api<T>(path, { ...opts, method: 'PATCH', body: JSON.stringify(body ?? {}) }),
-  delete: <T>(path: string, opts?: RequestOptions) => api<T>(path, { ...opts, method: 'DELETE' }),
+  delete: <T = unknown>(path: string, opts?: RequestOptions) =>
+    api<T>(path, { ...opts, method: 'DELETE' }),
 };
 
 export { API_URL, ApiError };
