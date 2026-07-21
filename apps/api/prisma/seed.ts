@@ -4,7 +4,7 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 const placeholder = (label: string, w = 800, h = 1000) =>
-  `https://placehold.co/${w}x${h}/111111/a78bfa?text=${encodeURIComponent(label)}`;
+  `https://placehold.co/${w}x${h}/111111/a78bfa/png?text=${encodeURIComponent(label)}`;
 
 async function main() {
   console.log('🌱 Seeding VYQOUR database...');
@@ -72,12 +72,19 @@ async function main() {
 
   const categories: Record<string, string> = {};
   for (const [i, c] of categoryDefs.entries()) {
+    const imageUrl = placeholder(c.name, 600, 600);
     const cat = await prisma.category.upsert({
       where: { slug: c.slug },
-      update: { name: c.name, description: c.description },
+      update: {
+        name: c.name,
+        description: c.description,
+        imageUrl,
+        sortOrder: i,
+        isActive: true,
+      },
       create: {
         ...c,
-        imageUrl: placeholder(c.name, 600, 600),
+        imageUrl,
         sortOrder: i,
         isActive: true,
       },
@@ -104,13 +111,20 @@ async function main() {
     const slug = name.toLowerCase().replace(/\s+/g, '-');
     await prisma.category.upsert({
       where: { slug },
-      update: {},
+      update: {
+        name,
+        imageUrl: placeholder(name, 400, 400),
+        parentId: categories['accessories'],
+        sortOrder: i,
+        isActive: true,
+      },
       create: {
         name,
         slug,
         parentId: categories['accessories'],
         imageUrl: placeholder(name, 400, 400),
         sortOrder: i,
+        isActive: true,
       },
     });
   }
