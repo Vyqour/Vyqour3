@@ -18,13 +18,17 @@ let RolesGuard = class RolesGuard {
         this.reflector = reflector;
     }
     canActivate(context) {
+        const req = context.switchToHttp().getRequest();
+        if (req?.method === 'OPTIONS') {
+            return true;
+        }
         const required = this.reflector.getAllAndOverride(roles_decorator_1.ROLES_KEY, [
             context.getHandler(),
             context.getClass(),
         ]);
         if (!required?.length)
             return true;
-        const { user } = context.switchToHttp().getRequest();
+        const user = req.user;
         if (!user || !required.includes(user.role)) {
             throw new common_1.ForbiddenException('Insufficient permissions');
         }

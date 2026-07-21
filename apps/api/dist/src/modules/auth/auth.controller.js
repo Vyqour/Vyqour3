@@ -21,35 +21,51 @@ const auth_service_1 = require("./auth.service");
 const auth_dto_1 = require("./dto/auth.dto");
 const current_user_decorator_1 = require("../../common/decorators/current-user.decorator");
 const public_decorator_1 = require("../../common/decorators/public.decorator");
-const isProd = process.env.NODE_ENV === 'production';
-function setAuthCookies(res, accessToken, refreshToken) {
-    res.cookie('access_token', accessToken, {
+function cookieBase(req) {
+    const host = (req.hostname || '').toLowerCase();
+    const xfProto = String(req.headers['x-forwarded-proto'] || '')
+        .split(',')[0]
+        .trim()
+        .toLowerCase();
+    const isCodespace = host.endsWith('.app.github.dev') ||
+        host.endsWith('.github.dev') ||
+        host.includes('githubpreview');
+    const isHttps = xfProto === 'https' ||
+        req.secure ||
+        isCodespace ||
+        process.env.NODE_ENV === 'production';
+    const sameSite = isHttps ? 'none' : 'lax';
+    return {
         httpOnly: true,
-        secure: isProd,
-        sameSite: isProd ? 'none' : 'lax',
-        maxAge: 15 * 60 * 1000,
+        secure: isHttps,
+        sameSite,
         path: '/',
+    };
+}
+function setAuthCookies(req, res, accessToken, refreshToken) {
+    const base = cookieBase(req);
+    res.cookie('access_token', accessToken, {
+        ...base,
+        maxAge: 15 * 60 * 1000,
     });
     res.cookie('refresh_token', refreshToken, {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: isProd ? 'none' : 'lax',
+        ...base,
         maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: '/',
     });
 }
-function clearAuthCookies(res) {
-    res.clearCookie('access_token', { path: '/' });
-    res.clearCookie('refresh_token', { path: '/' });
+function clearAuthCookies(req, res) {
+    const base = cookieBase(req);
+    res.clearCookie('access_token', base);
+    res.clearCookie('refresh_token', base);
 }
 let AuthController = class AuthController {
     constructor(auth, config) {
         this.auth = auth;
         this.config = config;
     }
-    async register(dto, res) {
+    async register(dto, req, res) {
         const result = await this.auth.register(dto);
-        setAuthCookies(res, result.accessToken, result.refreshToken);
+        setAuthCookies(req, res, result.accessToken, result.refreshToken);
         return result;
     }
     async login(dto, req, res) {
@@ -57,7 +73,7 @@ let AuthController = class AuthController {
             userAgent: req.headers['user-agent'],
             ipAddress: req.ip,
         });
-        setAuthCookies(res, result.accessToken, result.refreshToken);
+        setAuthCookies(req, res, result.accessToken, result.refreshToken);
         return result;
     }
     async refresh(dto, req, res) {
@@ -66,16 +82,16 @@ let AuthController = class AuthController {
             return { success: false, message: 'No refresh token' };
         }
         const result = await this.auth.refresh(token);
-        setAuthCookies(res, result.accessToken, result.refreshToken);
+        setAuthCookies(req, res, result.accessToken, result.refreshToken);
         return result;
     }
     async logout(dto, req, res) {
         const token = dto.refreshToken || req.cookies?.refresh_token;
-        clearAuthCookies(res);
+        clearAuthCookies(req, res);
         return this.auth.logout(token);
     }
-    async logoutAll(user, res) {
-        clearAuthCookies(res);
+    async logoutAll(user, req, res) {
+        clearAuthCookies(req, res);
         return this.auth.logoutAll(user.id);
     }
     async forgotPassword(dto) {
@@ -98,7 +114,7 @@ let AuthController = class AuthController {
     async googleCallback(req, res) {
         const profile = req.user;
         const result = await this.auth.validateGoogleUser(profile);
-        setAuthCookies(res, result.accessToken, result.refreshToken);
+        setAuthCookies(req, res, result.accessToken, result.refreshToken);
         const webUrl = this.config.get('webUrl') || 'http://localhost:3000';
         const redirect = `${webUrl}/auth/callback?accessToken=${result.accessToken}&refreshToken=${result.refreshToken}`;
         return res.redirect(redirect);
@@ -110,9 +126,10 @@ __decorate([
     (0, common_1.Post)('register'),
     (0, swagger_1.ApiOperation)({ summary: 'Register with email & password' }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, common_1.Res)({ passthrough: true })),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [auth_dto_1.RegisterDto, Object]),
+    __metadata("design:paramtypes", [auth_dto_1.RegisterDto, Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "register", null);
 __decorate([
@@ -154,9 +171,10 @@ __decorate([
     (0, common_1.HttpCode)(200),
     (0, swagger_1.ApiBearerAuth)(),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
-    __param(1, (0, common_1.Res)({ passthrough: true })),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "logoutAll", null);
 __decorate([

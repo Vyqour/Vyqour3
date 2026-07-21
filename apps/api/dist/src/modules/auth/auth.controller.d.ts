@@ -7,7 +7,7 @@ export declare class AuthController {
     private readonly auth;
     private readonly config;
     constructor(auth: AuthService, config: ConfigService);
-    register(dto: RegisterDto, res: Response): Promise<{
+    register(dto: RegisterDto, req: Request, res: Response): Promise<{
         user: {
             id: string;
             email: string;
@@ -55,7 +55,7 @@ export declare class AuthController {
     logout(dto: RefreshTokenDto, req: Request, res: Response): Promise<{
         message: string;
     }>;
-    logoutAll(user: AuthUser, res: Response): Promise<{
+    logoutAll(user: AuthUser, req: Request, res: Response): Promise<{
         message: string;
     }>;
     forgotPassword(dto: ForgotPasswordDto): Promise<{

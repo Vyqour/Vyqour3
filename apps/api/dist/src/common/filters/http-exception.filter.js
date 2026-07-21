@@ -9,6 +9,7 @@ var AllExceptionsFilter_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AllExceptionsFilter = void 0;
 const common_1 = require("@nestjs/common");
+const cors_util_1 = require("../utils/cors.util");
 let AllExceptionsFilter = AllExceptionsFilter_1 = class AllExceptionsFilter {
     constructor() {
         this.logger = new common_1.Logger(AllExceptionsFilter_1.name);
@@ -17,6 +18,7 @@ let AllExceptionsFilter = AllExceptionsFilter_1 = class AllExceptionsFilter {
         const ctx = host.switchToHttp();
         const response = ctx.getResponse();
         const request = ctx.getRequest();
+        this.applyCorsHeaders(request, response);
         let status = common_1.HttpStatus.INTERNAL_SERVER_ERROR;
         let message = 'Internal server error';
         let error = 'Internal Server Error';
@@ -44,6 +46,26 @@ let AllExceptionsFilter = AllExceptionsFilter_1 = class AllExceptionsFilter {
             path: request.url,
             timestamp: new Date().toISOString(),
         });
+    }
+    applyCorsHeaders(request, response) {
+        if (response.getHeader('Access-Control-Allow-Origin'))
+            return;
+        const origin = request.headers.origin;
+        if (!origin)
+            return;
+        const fromEnv = (0, cors_util_1.parseCorsOrigins)(process.env.CORS_ORIGINS);
+        const webUrl = (process.env.WEB_URL || '').trim().replace(/\/+$/, '');
+        const list = [
+            ...fromEnv,
+            webUrl,
+            'http://localhost:3000',
+            'http://127.0.0.1:3000',
+        ].filter(Boolean);
+        if ((0, cors_util_1.isOriginAllowed)(origin, list)) {
+            response.setHeader('Access-Control-Allow-Origin', origin);
+            response.setHeader('Access-Control-Allow-Credentials', 'true');
+            response.setHeader('Vary', 'Origin');
+        }
     }
 };
 exports.AllExceptionsFilter = AllExceptionsFilter;
