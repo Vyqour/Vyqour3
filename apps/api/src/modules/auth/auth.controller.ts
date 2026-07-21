@@ -4,14 +4,13 @@ import {
   Get,
   HttpCode,
   Post,
-  Query,
   Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Request, Response } from 'express';
+import { Request, Response, CookieOptions } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import {
@@ -26,28 +25,60 @@ import {
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 
-const isProd = process.env.NODE_ENV === 'production';
+/**
+ * Cookie flags for localhost + Codespaces + production.
+ * Cross-site (web :3000 → api :4000 on different hosts) needs SameSite=None; Secure.
+ * Codespaces always serves HTTPS, so Secure is safe there even when NODE_ENV=development.
+ */
+function cookieBase(req: Request): CookieOptions {
+  const host = (req.hostname || '').toLowerCase();
+  const xfProto = String(req.headers['x-forwarded-proto'] || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase();
+  const isCodespace =
+    host.endsWith('.app.github.dev') ||
+    host.endsWith('.github.dev') ||
+    host.includes('githubpreview');
+  const isHttps =
+    xfProto === 'https' ||
+    req.secure ||
+    isCodespace ||
+    process.env.NODE_ENV === 'production';
 
-function setAuthCookies(res: Response, accessToken: string, refreshToken: string) {
-  res.cookie('access_token', accessToken, {
+  // Cross-origin SPA ↔ API (different ports/hosts) needs None+Secure when HTTPS.
+  // Local http://localhost stays Lax so cookies still work without HTTPS.
+  const sameSite: CookieOptions['sameSite'] = isHttps ? 'none' : 'lax';
+
+  return {
     httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? 'none' : 'lax',
-    maxAge: 15 * 60 * 1000,
+    secure: isHttps,
+    sameSite,
     path: '/',
+  };
+}
+
+function setAuthCookies(
+  req: Request,
+  res: Response,
+  accessToken: string,
+  refreshToken: string,
+) {
+  const base = cookieBase(req);
+  res.cookie('access_token', accessToken, {
+    ...base,
+    maxAge: 15 * 60 * 1000,
   });
   res.cookie('refresh_token', refreshToken, {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? 'none' : 'lax',
+    ...base,
     maxAge: 7 * 24 * 60 * 60 * 1000,
-    path: '/',
   });
 }
 
-function clearAuthCookies(res: Response) {
-  res.clearCookie('access_token', { path: '/' });
-  res.clearCookie('refresh_token', { path: '/' });
+function clearAuthCookies(req: Request, res: Response) {
+  const base = cookieBase(req);
+  res.clearCookie('access_token', base);
+  res.clearCookie('refresh_token', base);
 }
 
 @ApiTags('auth')
@@ -61,9 +92,13 @@ export class AuthController {
   @Public()
   @Post('register')
   @ApiOperation({ summary: 'Register with email & password' })
-  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
+  async register(
+    @Body() dto: RegisterDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const result = await this.auth.register(dto);
-    setAuthCookies(res, result.accessToken, result.refreshToken);
+    setAuthCookies(req, res, result.accessToken, result.refreshToken);
     return result;
   }
 
@@ -80,7 +115,7 @@ export class AuthController {
       userAgent: req.headers['user-agent'],
       ipAddress: req.ip,
     });
-    setAuthCookies(res, result.accessToken, result.refreshToken);
+    setAuthCookies(req, res, result.accessToken, result.refreshToken);
     return result;
   }
 
@@ -97,7 +132,7 @@ export class AuthController {
       return { success: false, message: 'No refresh token' };
     }
     const result = await this.auth.refresh(token);
-    setAuthCookies(res, result.accessToken, result.refreshToken);
+    setAuthCookies(req, res, result.accessToken, result.refreshToken);
     return result;
   }
 
@@ -110,7 +145,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const token = dto.refreshToken || (req.cookies?.refresh_token as string | undefined);
-    clearAuthCookies(res);
+    clearAuthCookies(req, res);
     return this.auth.logout(token);
   }
 
@@ -119,9 +154,10 @@ export class AuthController {
   @ApiBearerAuth()
   async logoutAll(
     @CurrentUser() user: AuthUser,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    clearAuthCookies(res);
+    clearAuthCookies(req, res);
     return this.auth.logoutAll(user.id);
   }
 
@@ -178,7 +214,7 @@ export class AuthController {
       avatarUrl?: string;
     };
     const result = await this.auth.validateGoogleUser(profile);
-    setAuthCookies(res, result.accessToken, result.refreshToken);
+    setAuthCookies(req, res, result.accessToken, result.refreshToken);
     const webUrl = this.config.get<string>('webUrl') || 'http://localhost:3000';
     const redirect = `${webUrl}/auth/callback?accessToken=${result.accessToken}&refreshToken=${result.refreshToken}`;
     return res.redirect(redirect);
