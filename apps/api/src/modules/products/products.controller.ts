@@ -69,7 +69,7 @@ export class ProductsController {
   @Delete(':id')
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  remove(@Param('id') id: string) {
-    return this.products.remove(id);
+  remove(@Param('id') id: string, @Query('hard') hard?: string) {
+    return this.products.remove(id, hard === 'true' || hard === '1');
   }
 }
