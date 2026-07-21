@@ -10,6 +10,12 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 
   canActivate(context: ExecutionContext) {
+    // CORS preflight must never hit Passport / JWT validation
+    const req = context.switchToHttp().getRequest<{ method?: string }>();
+    if (req?.method === 'OPTIONS') {
+      return true;
+    }
+
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
