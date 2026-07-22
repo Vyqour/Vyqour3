@@ -37,10 +37,10 @@ export class ProductsService {
  where.collection = { slug: query.collection };
  }
  if (query.search) {
- where.OR = [\
- { name: { contains: query.search, mode: 'insensitive' } },\
- { description: { contains: query.search, mode: 'insensitive' } },\
- { tags: { has: query.search.toLowerCase() } },\
+ where.OR = [
+ { name: { contains: query.search, mode: 'insensitive' } },
+ { description: { contains: query.search, mode: 'insensitive' } },
+ { tags: { has: query.search.toLowerCase() } },
  ];
  }
  if (query.minPrice || query.maxPrice) {
@@ -80,15 +80,15 @@ export class ProductsService {
  (query.sortBy && sortMap[query.sortBy]) ||
  ({ createdAt: query.sortOrder || 'desc' } as Prisma.ProductOrderByWithRelationInput);
 
- const [items, total] = await Promise.all([\
- this.prisma.product.findMany({\
- where,\
- include: productInclude,\
- orderBy,\
- skip,\
- take,\
- }),\
- this.prisma.product.count({ where }),\
+ const [items, total] = await Promise.all([
+ this.prisma.product.findMany({
+ where,
+ include: productInclude,
+ orderBy,
+ skip,
+ take,
+ }),
+ this.prisma.product.count({ where }),
  ]);
 
  return { data: items, meta: paginationMeta(total, page, limit) };
@@ -150,7 +150,7 @@ export class ProductsService {
  async create(dto: CreateProductDto) {
  let slug = dto.slug || slugify(dto.name);
  const existing = await this.prisma.product.findUnique({ where: { slug } });
- if (existing) slug = \`${slug}-${Date.now().toString(36)}\`;
+ if (existing) slug = `${slug}-${Date.now().toString(36)}`;
 
  const product = await this.prisma.product.create({
  data: {
@@ -296,19 +296,19 @@ export class ProductsService {
  include: productInclude,
  take: 8,
  };
- const [featured, newArrivals, trending, bestSellers] = await Promise.all([\
- this.prisma.product.findMany({ ...base, where: { ...base.where, isFeatured: true } }),\
- this.prisma.product.findMany({\
- ...base,\
- where: { ...base.where, isNewArrival: true },\
- orderBy: { createdAt: 'desc' },\
- }),\
- this.prisma.product.findMany({ ...base, where: { ...base.where, isTrending: true } }),\
- this.prisma.product.findMany({\
- ...base,\
- where: { ...base.where, isBestSeller: true },\
- orderBy: { totalSold: 'desc' },\
- }),\
+ const [featured, newArrivals, trending, bestSellers] = await Promise.all([
+ this.prisma.product.findMany({ ...base, where: { ...base.where, isFeatured: true } }),
+ this.prisma.product.findMany({
+ ...base,
+ where: { ...base.where, isNewArrival: true },
+ orderBy: { createdAt: 'desc' },
+ }),
+ this.prisma.product.findMany({ ...base, where: { ...base.where, isTrending: true } }),
+ this.prisma.product.findMany({
+ ...base,
+ where: { ...base.where, isBestSeller: true },
+ orderBy: { totalSold: 'desc' },
+ }),
  ]);
  const result = { featured, newArrivals, trending, bestSellers };
  await this.redis.set(cacheKey, result, 300);
