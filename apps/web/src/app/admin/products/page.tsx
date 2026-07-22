@@ -248,6 +248,7 @@ export default function AdminProductsPage() {
   const [drafts, setDrafts] = useState<DraftForm[]>([]);
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -278,6 +279,7 @@ export default function AdminProductsPage() {
     const q = filter.trim().toLowerCase();
     return drafts.filter((d) => {
       if (statusFilter !== 'ALL' && d.status !== statusFilter) return false;
+      if (categoryFilter !== 'ALL' && d.categoryId !== categoryFilter) return false;
       if (!q) return true;
       return (
         d.name.toLowerCase().includes(q) ||
@@ -285,7 +287,7 @@ export default function AdminProductsPage() {
         d.tags.toLowerCase().includes(q)
       );
     });
-  }, [drafts, filter, statusFilter]);
+  }, [drafts, filter, statusFilter, categoryFilter]);
 
   const updateDraft = (localKey: string, patch: Partial<DraftForm>) => {
     setDrafts((prev) => prev.map((d) => (d.localKey === localKey ? { ...d, ...patch } : d)));
@@ -480,6 +482,18 @@ export default function AdminProductsPage() {
           {STATUSES.map((s) => (
             <option key={s} value={s}>
               {s}
+            </option>
+          ))}
+        </select>
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="h-11 rounded-full border border-white/15 bg-white/5 px-4 text-sm text-white"
+        >
+          <option value="ALL">All categories</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
             </option>
           ))}
         </select>
