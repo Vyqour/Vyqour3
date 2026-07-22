@@ -247,27 +247,21 @@ export class ProductsService {
 
     if (hard) {
       await this.prisma.$transaction(async (tx) => {
+        // Clear relations that block hard delete (order items keep historical productId nullable? detach)
         await tx.productImage.deleteMany({ where: { productId: id } });
         await tx.productVariant.deleteMany({ where: { productId: id } });
-        try {
-          await tx.inventory.deleteMany({ where: { productId: id } });
-        } catch {
-          /* optional */
-        }
-        try {
-          await tx.recentlyViewed.deleteMany({ where: { productId: id } });
-        } catch {
-          /* optional */
-        }
-        try {
-          await tx.review.deleteMany({ where: { productId: id } });
-        } catch {
-          /* optional */
-        }
-        try {
-          await tx.cartItem.deleteMany({ where: { productId: id } });
-        } catch {
-          /* optional */
+        await tx.inventory.deleteMany({ where: { productId: id } });
+        await tx.recentlyViewed.deleteMany({ where: { productId: id } });
+        await tx.review.deleteMany({ where: { productId: id } });
+        await tx.cartItem.deleteMany({ where: { productId: id } });
+        await tx.wishlistItem.deleteMany({ where: { productId: id } });
+        // Order line items are historical — null product link if schema allows; otherwise keep and block
+        // OrderItem.productId is required without onDelete Cascade, so refuse hard delete when ordered.
+        const ordered = await tx.orderItem.count({ where: { productId: id } });
+        if (ordered > 0) {
+          throw new ConflictException(
+            'Cannot permanently delete a product that appears on orders. Archive it instead.',
+          );
         }
         await tx.product.delete({ where: { id } });
       });

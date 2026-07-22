@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { slugify } from '../../common/utils/slug.util';
@@ -49,6 +50,10 @@ export class CategoriesService {
     const slug = dto.slug || slugify(dto.name);
     const exists = await this.prisma.category.findUnique({ where: { slug } });
     if (exists) throw new ConflictException('Category slug already exists');
+    if (dto.parentId) {
+      const parent = await this.prisma.category.findUnique({ where: { id: dto.parentId } });
+      if (!parent) throw new NotFoundException('Parent category not found');
+    }
     const category = await this.prisma.category.create({
       data: {
         name: dto.name,
@@ -59,6 +64,7 @@ export class CategoriesService {
         sortOrder: dto.sortOrder ?? 0,
         seoTitle: dto.seoTitle,
         seoDescription: dto.seoDescription,
+        isActive: dto.isActive ?? true,
       },
     });
     await this.redis.delByPattern('categories:*');
@@ -67,8 +73,36 @@ export class CategoriesService {
 
   async update(id: string, dto: UpdateCategoryDto) {
     await this.ensureExists(id);
-    const data: Record<string, unknown> = { ...dto };
-    if (dto.name && !dto.slug) data.slug = slugify(dto.name);
+    if (dto.parentId) {
+      if (dto.parentId === id) throw new ConflictException('Category cannot be its own parent');
+      const parent = await this.prisma.category.findUnique({ where: { id: dto.parentId } });
+      if (!parent) throw new NotFoundException('Parent category not found');
+    }
+    if (dto.slug) {
+      const clash = await this.prisma.category.findFirst({
+        where: { slug: dto.slug, NOT: { id } },
+      });
+      if (clash) throw new ConflictException('Category slug already exists');
+    }
+
+    const data: Prisma.CategoryUpdateInput = {};
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.slug !== undefined) data.slug = dto.slug;
+    else if (dto.name) data.slug = slugify(dto.name);
+    if (dto.description !== undefined) data.description = dto.description;
+    if (dto.imageUrl !== undefined) data.imageUrl = dto.imageUrl;
+    if (dto.sortOrder !== undefined) data.sortOrder = dto.sortOrder;
+    if (dto.seoTitle !== undefined) data.seoTitle = dto.seoTitle;
+    if (dto.seoDescription !== undefined) data.seoDescription = dto.seoDescription;
+    if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.parentId !== undefined) {
+      if (!dto.parentId) {
+        data.parent = { disconnect: true };
+      } else {
+        data.parent = { connect: { id: dto.parentId } };
+      }
+    }
+
     const category = await this.prisma.category.update({ where: { id }, data });
     await this.redis.delByPattern('categories:*');
     return category;

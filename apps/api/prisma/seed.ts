@@ -6,6 +6,31 @@ const prisma = new PrismaClient();
 const placeholder = (label: string, w = 800, h = 1000) =>
   `https://placehold.co/${w}x${h}/111111/a78bfa/png?text=${encodeURIComponent(label)}`;
 
+/** Product-style category photos (Unsplash) — used for category cards */
+const categoryPhoto = (slugOrName: string, w = 800) => {
+  const key = slugOrName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const map: Record<string, string> = {
+    't-shirts': 'photo-1521572163474-6864f9cf17ab',
+    hoodies: 'photo-1556821840-3a63f95609a7',
+    jackets: 'photo-1551028719-00167b16eac5',
+    'bottom-wear': 'photo-1624378439575-d8705ad7ae80',
+    tops: 'photo-1434389677669-e08b4cac3105',
+    dresses: 'photo-1595777457583-95e059d581b8',
+    accessories: 'photo-1523170335258-f5ed11844a49',
+    caps: 'photo-1588850561407-ed78c282e89b',
+    'tote-bags': 'photo-1590874103328-eac38a683ce7',
+    drinkware: 'photo-1514228742587-6b1558fcca3d',
+    mugs: 'photo-1514228742587-6b1558fcca3d',
+    posters: 'photo-1513519245088-0e12902e35ca',
+    stickers: 'photo-1611532736597-de2d4265fba3',
+    'phone-covers': 'photo-1601784551446-20c9e07cdbdb',
+    sweatshirts: 'photo-1578587018452-892bacefd3f2',
+    'polo-t-shirts': 'photo-1586790170083-2f9ceadc732d',
+  };
+  const id = map[key] || 'photo-1441986300917-64674bd600d8';
+  return `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=80`;
+};
+
 async function main() {
   console.log('🌱 Seeding VYQOUR database...');
 
@@ -72,7 +97,7 @@ async function main() {
 
   const categories: Record<string, string> = {};
   for (const [i, c] of categoryDefs.entries()) {
-    const imageUrl = placeholder(c.name, 600, 600);
+    const imageUrl = categoryPhoto(c.slug, 800);
     const cat = await prisma.category.upsert({
       where: { slug: c.slug },
       update: {
@@ -109,11 +134,12 @@ async function main() {
   ];
   for (const [i, name] of accessoryChildren.entries()) {
     const slug = name.toLowerCase().replace(/\s+/g, '-');
+    const imageUrl = categoryPhoto(slug, 600);
     await prisma.category.upsert({
       where: { slug },
       update: {
         name,
-        imageUrl: placeholder(name, 400, 400),
+        imageUrl,
         parentId: categories['accessories'],
         sortOrder: i,
         isActive: true,
@@ -122,7 +148,7 @@ async function main() {
         name,
         slug,
         parentId: categories['accessories'],
-        imageUrl: placeholder(name, 400, 400),
+        imageUrl,
         sortOrder: i,
         isActive: true,
       },
