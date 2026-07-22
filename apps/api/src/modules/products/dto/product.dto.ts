@@ -112,6 +112,11 @@ export class CreateProductDto {
   @IsString()
   categoryId!: string;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  collectionId?: string;
+
   @ApiPropertyOptional({ enum: ProductStatus })
   @IsOptional()
   @IsEnum(ProductStatus)
@@ -185,6 +190,11 @@ export class ProductQueryDto extends PaginationDto {
   @IsOptional()
   @IsString()
   category?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  collection?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

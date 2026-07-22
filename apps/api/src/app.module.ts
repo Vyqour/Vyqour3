@@ -12,6 +12,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { ProductsModule } from './modules/products/products.module';
 import { CategoriesModule } from './modules/categories/categories.module';
+import { CollectionsModule } from './modules/collections/collections.module';
 import { CartModule } from './modules/cart/cart.module';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { OrdersModule } from './modules/orders/orders.module';
@@ -52,6 +53,7 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
     UsersModule,
     ProductsModule,
     CategoriesModule,
+    CollectionsModule,
     CartModule,
     WishlistModule,
     OrdersModule,

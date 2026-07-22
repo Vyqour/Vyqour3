@@ -30,7 +30,16 @@ export class MailService {
       this.logger.log(`[email:dev] to=${to} subject=${subject}`);
       return;
     }
-    await this.transporter.sendMail({ from: this.from, to, subject, html });
+    try {
+      await this.transporter.sendMail({ from: this.from, to, subject, html });
+    } catch (err) {
+      this.logger.error(
+        `Failed to send email to=${to} subject=${subject}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      // Do not throw — auth / checkout must not fail solely because SMTP is down
+    }
   }
 
   async sendVerificationEmail(email: string, token: string) {

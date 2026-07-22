@@ -17,6 +17,8 @@ const categoryPhoto = (slugOrName: string, w = 800) => {
     tops: 'photo-1434389677669-e08b4cac3105',
     dresses: 'photo-1595777457583-95e059d581b8',
     accessories: 'photo-1523170335258-f5ed11844a49',
+    clothes: 'photo-1489987707025-afc232f7ea0f',
+    clothing: 'photo-1489987707025-afc232f7ea0f',
     caps: 'photo-1588850561407-ed78c282e89b',
     'tote-bags': 'photo-1590874103328-eac38a683ce7',
     drinkware: 'photo-1514228742587-6b1558fcca3d',
@@ -88,6 +90,8 @@ async function main() {
   const categoryDefs = [
     { name: 'T-Shirts', slug: 't-shirts', description: 'Premium everyday tees' },
     { name: 'Hoodies', slug: 'hoodies', description: 'Heavyweight comfort' },
+    { name: 'Sweatshirts', slug: 'sweatshirts', description: 'Soft layering essentials' },
+    { name: 'Polo T-Shirts', slug: 'polo-t-shirts', description: 'Clean collar classics' },
     { name: 'Jackets', slug: 'jackets', description: 'Layered luxury' },
     { name: 'Bottom Wear', slug: 'bottom-wear', description: 'Joggers, cargos & more' },
     { name: 'Tops', slug: 'tops', description: 'Elevated tops' },
@@ -121,6 +125,7 @@ async function main() {
     'Caps',
     'Tote Bags',
     'Drinkware',
+    'Mugs',
     'Mouse Pads',
     'Scarves',
     'Stoles',
@@ -155,10 +160,46 @@ async function main() {
     });
   }
 
+
+  const collectionDefs = [
+    {
+      name: 'Clothes',
+      slug: 'clothes',
+      description: 'Apparel essentials — tees, hoodies, layers and more',
+      imageUrl: categoryPhoto('t-shirts', 900),
+    },
+    {
+      name: 'Accessories',
+      slug: 'accessories',
+      description: 'Caps, totes, phone covers and finishing details',
+      imageUrl: categoryPhoto('accessories', 900),
+    },
+  ];
+  const collections: Record<string, string> = {};
+  for (const [i, c] of collectionDefs.entries()) {
+    const row = await prisma.collection.upsert({
+      where: { slug: c.slug },
+      update: {
+        name: c.name,
+        description: c.description,
+        imageUrl: c.imageUrl,
+        sortOrder: i,
+        isActive: true,
+      },
+      create: {
+        ...c,
+        sortOrder: i,
+        isActive: true,
+      },
+    });
+    collections[c.slug] = row.id;
+  }
+
   type SeedProduct = {
     name: string;
     slug: string;
     category: string;
+    collection?: string;
     price: number;
     compare?: number;
     featured?: boolean;
@@ -402,7 +443,39 @@ async function main() {
 
   for (const p of products) {
     const existing = await prisma.product.findUnique({ where: { slug: p.slug } });
-    if (existing) continue;
+    const resolvedCollectionId =
+      collections[
+        p.collection ||
+          (p.category === 'accessories' ||
+          [
+            'caps',
+            'tote-bags',
+            'drinkware',
+            'mugs',
+            'mouse-pads',
+            'scarves',
+            'stoles',
+            'scrunchies',
+            'dog-tags',
+            'pendants',
+            'personalized-pens',
+            'posters',
+            'stickers',
+            'phone-covers',
+          ].includes(p.category)
+            ? 'accessories'
+            : 'clothes')
+      ] || undefined;
+    if (existing) {
+      await prisma.product.update({
+        where: { id: existing.id },
+        data: {
+          categoryId: categories[p.category] || existing.categoryId,
+          collectionId: resolvedCollectionId ?? existing.collectionId,
+        },
+      });
+      continue;
+    }
 
     const product = await prisma.product.create({
       data: {
@@ -413,6 +486,14 @@ async function main() {
         basePrice: p.price,
         compareAtPrice: p.compare,
         categoryId: categories[p.category],
+        collectionId:
+          collections[
+            p.collection ||
+              (p.category === 'accessories' ||
+              ['caps','tote-bags','drinkware','mouse-pads','scarves','stoles','scrunchies','dog-tags','pendants','personalized-pens','posters','stickers','phone-covers'].includes(p.category)
+                ? 'accessories'
+                : 'clothes')
+          ] || undefined,
         status: ProductStatus.ACTIVE,
         // Qikink mapping defaults — replace SKUs with your Live "My Products" SKUs
         qikinkSku: undefined,

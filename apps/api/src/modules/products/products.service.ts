@@ -10,6 +10,7 @@ const productInclude = {
  images: { orderBy: { sortOrder: 'asc' as const } },
  variants: { where: { isActive: true } },
  category: { select: { id: true, name: true, slug: true } },
+ collection: { select: { id: true, name: true, slug: true } },
  inventory: true,
 } satisfies Prisma.ProductInclude;
 
@@ -31,6 +32,9 @@ export class ProductsService {
 
  if (query.category) {
  where.category = { slug: query.category };
+ }
+ if (query.collection) {
+ where.collection = { slug: query.collection };
  }
  if (query.search) {
  where.OR = [\
@@ -157,6 +161,7 @@ export class ProductsService {
  basePrice: dto.basePrice,
  compareAtPrice: dto.compareAtPrice,
  categoryId: dto.categoryId,
+ collectionId: dto.collectionId || undefined,
  status: dto.status || ProductStatus.DRAFT,
  isFeatured: dto.isFeatured ?? false,
  isNewArrival: dto.isNewArrival ?? false,
@@ -226,6 +231,10 @@ export class ProductsService {
  seoDescription: dto.seoDescription,
  };
  if (dto.categoryId) data.category = { connect: { id: dto.categoryId } };
+ if (dto.collectionId !== undefined) {
+   if (!dto.collectionId) data.collection = { disconnect: true };
+   else data.collection = { connect: { id: dto.collectionId } };
+ }
  if (dto.name && !dto.slug) data.slug = slugify(dto.name);
  if (dto.slug) data.slug = dto.slug;
  if (dto.status === ProductStatus.ACTIVE && !existing.publishedAt) {

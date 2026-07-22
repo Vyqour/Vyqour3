@@ -237,6 +237,27 @@ model Category {
   @@map("categories")
 }
 
+
+model Collection {
+  id             String    @id @default(cuid())
+  name           String
+  slug           String    @unique
+  description    String?
+  imageUrl       String?
+  isActive       Boolean   @default(true)
+  sortOrder      Int       @default(0)
+  seoTitle       String?
+  seoDescription String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  products       Product[]
+
+  @@index([slug])
+  @@index([isActive])
+  @@map("collections")
+}
+
 model Product {
   id              String        @id @default(cuid())
   name            String
@@ -250,6 +271,8 @@ model Product {
   barcode         String?
   categoryId      String
   category        Category      @relation(fields: [categoryId], references: [id])
+  collectionId    String?
+  collection      Collection?   @relation(fields: [collectionId], references: [id], onDelete: SetNull)
   status          ProductStatus @default(DRAFT)
   isFeatured      Boolean       @default(false)
   isNewArrival    Boolean       @default(false)
@@ -291,6 +314,7 @@ model Product {
 
   @@index([slug])
   @@index([categoryId])
+  @@index([collectionId])
   @@index([status])
   @@index([isFeatured])
   @@index([isNewArrival])
