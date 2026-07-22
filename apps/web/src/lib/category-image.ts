@@ -42,6 +42,9 @@ const CATEGORY_IMAGES: Record<string, string> = {
   tops: UNSPLASH('photo-1434389677669-e08b4cac3105'),
   dresses: UNSPLASH('photo-1595777457583-95e059d581b8'),
   accessories: UNSPLASH('photo-1523170335258-f5ed11844a49'),
+  clothes: UNSPLASH('photo-1489987707025-afc232f7ea0f'),
+  clothing: UNSPLASH('photo-1489987707025-afc232f7ea0f'),
+  apparel: UNSPLASH('photo-1489987707025-afc232f7ea0f'),
 };
 
 function normalizeKey(value: string): string {

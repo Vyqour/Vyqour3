@@ -164,15 +164,33 @@ export async function api<T = unknown>(path: string, options: RequestOptions = {
   }
 
   if (!res.ok) {
-    const msg =
-      (json as { message?: string | string[] })?.message ||
-      res.statusText ||
-      'Request failed';
-    throw new ApiError(Array.isArray(msg) ? msg.join(', ') : String(msg), res.status, json);
+    const body = json as {
+      message?: string | string[];
+      error?: string;
+      statusCode?: number;
+    } | null;
+    let msg: string | string[] | undefined = body?.message;
+    if (Array.isArray(msg)) msg = msg.join(', ');
+    if (!msg || msg === 'Request failed') {
+      msg =
+        body?.error ||
+        (res.status === 0
+          ? 'Cannot reach the API'
+          : res.status === 401
+            ? 'Invalid email or password'
+            : res.status === 409
+              ? 'Conflict — resource already exists'
+              : res.status === 400
+                ? 'Invalid request — check your input'
+                : res.statusText) ||
+        `Request failed (${res.status})`;
+    }
+    throw new ApiError(String(msg), res.status, json);
   }
 
   if (json && typeof json === 'object' && 'data' in (json as object) && 'success' in (json as object)) {
-    const envelope = json as { data: T; meta?: unknown };
+    const envelope = json as { data: T; meta?: unknown; success?: boolean };
+    // Paginated list responses keep { data, meta }
     if (envelope.meta && envelope.data && typeof envelope.data === 'object') {
       return { ...(envelope as object), data: envelope.data } as T;
     }

@@ -19,11 +19,18 @@ export default function RegisterPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await register(form);
+      await register({
+        ...form,
+        email: form.email.trim().toLowerCase(),
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim() || undefined,
+        phone: form.phone.trim() || undefined,
+      });
       toast.success('Welcome to VYQOUR');
       router.push('/account');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Registration failed');
+      const msg = err instanceof Error ? err.message : 'Registration failed';
+      toast.error(msg && msg !== 'Request failed' ? msg : 'Registration failed — check your details and that the API is running');
     } finally {
       setLoading(false);
     }

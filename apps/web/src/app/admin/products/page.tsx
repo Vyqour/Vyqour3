@@ -24,6 +24,8 @@ import { Badge } from '@/components/ui/badge';
 
 type Category = { id: string; name: string; slug: string };
 
+type Collection = { id: string; name: string; slug: string };
+
 type ProductImage = {
   url: string;
   alt?: string;
@@ -51,6 +53,8 @@ type Product = {
   basePrice: number | string;
   compareAtPrice?: number | string | null;
   categoryId: string;
+  collectionId?: string | null;
+  collection?: { id: string; name: string; slug: string } | null;
   status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED' | 'OUT_OF_STOCK';
   isFeatured?: boolean;
   isNewArrival?: boolean;
@@ -78,6 +82,7 @@ type DraftForm = {
   basePrice: string;
   compareAtPrice: string;
   categoryId: string;
+  collectionId: string;
   status: Product['status'];
   isFeatured: boolean;
   isNewArrival: boolean;
@@ -119,7 +124,7 @@ function slugify(input: string) {
     .slice(0, 80);
 }
 
-function makeTemplate(categoryId = ''): DraftForm {
+function makeTemplate(categoryId = '', collectionId = ''): DraftForm {
   const n = Math.floor(Math.random() * 900 + 100);
   const name = `New Product ${n}`;
   const slug = slugify(name);
@@ -143,6 +148,7 @@ function makeTemplate(categoryId = ''): DraftForm {
     basePrice: '999',
     compareAtPrice: '1499',
     categoryId,
+    collectionId,
     status: 'DRAFT',
     isFeatured: false,
     isNewArrival: true,
@@ -181,6 +187,7 @@ function productToDraft(p: Product): DraftForm {
     basePrice: String(p.basePrice ?? ''),
     compareAtPrice: p.compareAtPrice != null ? String(p.compareAtPrice) : '',
     categoryId: p.categoryId || p.category?.id || '',
+    collectionId: p.collectionId || p.collection?.id || '',
     status: p.status || 'DRAFT',
     isFeatured: !!p.isFeatured,
     isNewArrival: !!p.isNewArrival,
@@ -245,6 +252,7 @@ export default function AdminProductsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
+  const [collections, setCollections] = useState<Collection[]>([]);
   const [drafts, setDrafts] = useState<DraftForm[]>([]);
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -254,13 +262,16 @@ export default function AdminProductsPage() {
     setLoading(true);
     setError('');
     try {
-      const [prodRes, catRes] = await Promise.all([
+      const [prodRes, catRes, colRes] = await Promise.all([
         apiClient.get('/products/admin/all?limit=100', { auth: true }),
         apiClient.get('/categories?all=true', { auth: true }),
+        apiClient.get('/collections?all=true', { auth: true }),
       ]);
       const products = unwrapList<Product>(prodRes);
       const cats = unwrapList<Category>(catRes);
+      const cols = unwrapList<Collection>(colRes);
       setCategories(cats);
+      setCollections(cols);
       setDrafts(products.map(productToDraft));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load products');
@@ -274,6 +285,7 @@ export default function AdminProductsPage() {
   }, [load]);
 
   const defaultCategoryId = categories[0]?.id || '';
+  const defaultCollectionId = collections[0]?.id || '';
 
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -289,12 +301,32 @@ export default function AdminProductsPage() {
     });
   }, [drafts, filter, statusFilter, categoryFilter]);
 
+  const groupedByCategory = useMemo(() => {
+    const map = new Map<string, { label: string; items: typeof visible }>();
+    for (const d of visible) {
+      const cat = categories.find((c) => c.id === d.categoryId);
+      const key = d.categoryId || 'uncategorized';
+      const label = cat?.name || 'Uncategorized';
+      if (!map.has(key)) map.set(key, { label, items: [] });
+      map.get(key)!.items.push(d);
+    }
+    // Prefer known category order from categories list
+    const ordered: { key: string; label: string; items: typeof visible }[] = [];
+    for (const c of categories) {
+      const g = map.get(c.id);
+      if (g) ordered.push({ key: c.id, label: g.label, items: g.items });
+      map.delete(c.id);
+    }
+    for (const [key, g] of map) ordered.push({ key, label: g.label, items: g.items });
+    return ordered;
+  }, [visible, categories]);
+
   const updateDraft = (localKey: string, patch: Partial<DraftForm>) => {
     setDrafts((prev) => prev.map((d) => (d.localKey === localKey ? { ...d, ...patch } : d)));
   };
 
   const addTemplate = () => {
-    const tpl = makeTemplate(defaultCategoryId);
+    const tpl = makeTemplate(defaultCategoryId, defaultCollectionId);
     setDrafts((prev) => [tpl, ...prev]);
     toast.success('Product template added — fill details and Save');
     // scroll top
@@ -328,6 +360,7 @@ export default function AdminProductsPage() {
       basePrice,
       compareAtPrice: d.compareAtPrice ? Number(d.compareAtPrice) : undefined,
       categoryId: d.categoryId,
+      collectionId: d.collectionId || undefined,
       status: d.status,
       isFeatured: d.isFeatured,
       isNewArrival: d.isNewArrival,
@@ -508,8 +541,17 @@ export default function AdminProductsPage() {
         </div>
       )}
 
-      <div className="space-y-4">
-        {visible.map((d) => {
+      <div className="space-y-8">
+        {groupedByCategory.map((group) => (
+          <section key={group.key} className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-white/50">
+                {group.label}
+                <span className="ml-2 text-white/30">({group.items.length})</span>
+              </h3>
+            </div>
+            <div className="space-y-4">
+        {group.items.map((d) => {
           const priceNum = Number(d.basePrice);
           return (
             <div
@@ -548,7 +590,7 @@ export default function AdminProductsPage() {
                     <p className="mt-0.5 truncate text-xs text-white/45">
                       {d.slug || 'no-slug'} ·{' '}
                       {Number.isFinite(priceNum) ? formatInr(priceNum) : '—'} ·{' '}
-                      {categories.find((c) => c.id === d.categoryId)?.name || 'No category'}
+                      {categories.find((c) => c.id === d.categoryId)?.name || 'No category'} · {collections.find((c) => c.id === d.collectionId)?.name || 'No collection'}
                     </p>
                   </div>
                   <span className="ml-auto text-white/40">
@@ -651,6 +693,20 @@ export default function AdminProductsPage() {
                       >
                         <option value="">Select category</option>
                         {categories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Collection">
+                      <select
+                        value={d.collectionId}
+                        onChange={(e) => updateDraft(d.localKey, { collectionId: e.target.value })}
+                        className="h-11 w-full rounded-full border border-white/15 bg-white/5 px-4 text-sm text-white"
+                      >
+                        <option value="">No collection</option>
+                        {collections.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.name}
                           </option>
@@ -819,6 +875,9 @@ export default function AdminProductsPage() {
           );
         })}
 
+            </div>
+          </section>
+        ))}
         {!visible.length && (
           <div className="rounded-2xl border border-dashed border-white/15 px-6 py-16 text-center">
             <p className="text-white/60">No products yet.</p>

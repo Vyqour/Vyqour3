@@ -25,6 +25,17 @@ export interface Category {
   _count?: { products: number };
 }
 
+export interface Collection {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  imageUrl?: string | null;
+  isActive?: boolean;
+  sortOrder?: number;
+  _count?: { products: number };
+}
+
 export interface ProductImage {
   id: string;
   url: string;
@@ -58,6 +69,7 @@ export interface Product {
   isNewArrival: boolean;
   isBestSeller: boolean;
   isTrending: boolean;
+  categoryId?: string;
   tags: string[];
   materials?: string | null;
   careInstructions?: string | null;
@@ -67,6 +79,8 @@ export interface Product {
   images: ProductImage[];
   variants: ProductVariant[];
   category?: { id: string; name: string; slug: string };
+  collectionId?: string | null;
+  collection?: { id: string; name: string; slug: string } | null;
   seoTitle?: string | null;
   seoDescription?: string | null;
 }

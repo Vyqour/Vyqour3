@@ -20,11 +20,12 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const user = await login(email, password);
+      const user = await login(email.trim().toLowerCase(), password);
       toast.success(`Welcome back, ${user.firstName}`);
       router.push(user.role === 'CUSTOMER' ? '/account' : '/admin');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Login failed');
+      const msg = err instanceof Error ? err.message : 'Login failed';
+      toast.error(msg && msg !== 'Request failed' ? msg : 'Login failed — check email/password and that the API is running');
     } finally {
       setLoading(false);
     }
