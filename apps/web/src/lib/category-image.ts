@@ -72,7 +72,7 @@ export function categoryImageUrl(nameOrSlug: string, size = 800): string {
   return base;
 }
 
-function isBlankOrPlaceholder(url: string, name: string): boolean {
+function isBlankOrPlaceholder(url: string): boolean {
   const trimmed = (url || '').trim();
   if (!trimmed) return true;
   try {
@@ -95,7 +95,7 @@ export function resolveCategoryImage(
   const name = category.name || 'Category';
   const slug = category.slug || '';
 
-  if (url && !isBlankOrPlaceholder(url, name)) {
+  if (url && !isBlankOrPlaceholder(url)) {
     return url;
   }
 

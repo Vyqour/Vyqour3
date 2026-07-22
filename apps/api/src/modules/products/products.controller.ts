@@ -33,6 +33,7 @@ export class ProductsController {
     return this.products.homeSections();
   }
 
+  // Static path before :slug / :id
   @Get('admin/all')
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
@@ -41,15 +42,15 @@ export class ProductsController {
   }
 
   @Public()
-  @Get(':slug')
-  findOne(@Param('slug') slug: string, @CurrentUser() user?: AuthUser) {
-    return this.products.findBySlug(slug, user?.id);
-  }
-
-  @Public()
   @Get(':id/related')
   related(@Param('id') id: string) {
     return this.products.related(id);
+  }
+
+  @Public()
+  @Get(':slug')
+  findOne(@Param('slug') slug: string, @CurrentUser() user?: AuthUser) {
+    return this.products.findBySlug(slug, user?.id);
   }
 
   @Post()

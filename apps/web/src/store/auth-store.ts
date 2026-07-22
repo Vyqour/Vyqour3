@@ -56,6 +56,16 @@ export const useAuthStore = create<AuthState>()(
         }
         setTokens(res.accessToken, res.refreshToken);
         set({ user: res.user });
+        // Merge guest session cart into the authenticated user cart
+        try {
+          const sid =
+            typeof window !== 'undefined' ? localStorage.getItem('vyqour_sid') : null;
+          if (sid) {
+            await apiClient.post('/cart/merge', {}, { auth: true, session: true });
+          }
+        } catch {
+          /* guest cart merge is best-effort */
+        }
         return res.user;
       },
       register: async (data) => {
@@ -89,6 +99,15 @@ export const useAuthStore = create<AuthState>()(
         }
         setTokens(res.accessToken, res.refreshToken);
         set({ user: res.user });
+        try {
+          const sid =
+            typeof window !== 'undefined' ? localStorage.getItem('vyqour_sid') : null;
+          if (sid) {
+            await apiClient.post('/cart/merge', {}, { auth: true, session: true });
+          }
+        } catch {
+          /* guest cart merge is best-effort */
+        }
         return res.user;
       },
       logout: async () => {

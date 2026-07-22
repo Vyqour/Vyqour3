@@ -29,17 +29,18 @@ export class BlogController {
     return this.blog.list(page ? +page : 1, limit ? +limit : 9, true);
   }
 
-  @Public()
-  @Get(':slug')
-  one(@Param('slug') slug: string) {
-    return this.blog.bySlug(slug);
-  }
-
+  // Static admin path MUST be registered before :slug or it is captured as a slug
   @Get('admin/all')
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   adminAll(@Query('page') page?: string) {
     return this.blog.list(page ? +page : 1, 20, false);
+  }
+
+  @Public()
+  @Get(':slug')
+  one(@Param('slug') slug: string) {
+    return this.blog.bySlug(slug);
   }
 
   @Post()

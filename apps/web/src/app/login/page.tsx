@@ -1,16 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/auth-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { API_URL } from '@/lib/api';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const login = useAuthStore((s) => s.login);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,7 +23,14 @@ export default function LoginPage() {
     try {
       const user = await login(email.trim().toLowerCase(), password);
       toast.success(`Welcome back, ${user.firstName}`);
-      router.push(user.role === 'CUSTOMER' ? '/account' : '/admin');
+      const next = searchParams.get('next');
+      const safeNext =
+        next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+      if (safeNext) {
+        router.push(safeNext);
+      } else {
+        router.push(user.role === 'CUSTOMER' ? '/account' : '/admin');
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Login failed';
       toast.error(msg && msg !== 'Request failed' ? msg : 'Login failed — check email/password and that the API is running');
@@ -77,5 +85,21 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container-px flex min-h-[70vh] items-center justify-center py-16">
+          <div className="glass w-full max-w-md rounded-3xl p-8 text-sm text-muted-foreground">
+            Loading…
+          </div>
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
