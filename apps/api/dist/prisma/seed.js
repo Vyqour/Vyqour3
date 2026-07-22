@@ -3,7 +3,32 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const client_1 = require("@prisma/client");
 const bcrypt = require("bcrypt");
 const prisma = new client_1.PrismaClient();
-const placeholder = (label, w = 800, h = 1000) => `https://placehold.co/${w}x${h}/111111/a78bfa?text=${encodeURIComponent(label)}`;
+const placeholder = (label, w = 800, h = 1000) => `https://placehold.co/${w}x${h}/111111/a78bfa/png?text=${encodeURIComponent(label)}`;
+const categoryPhoto = (slugOrName, w = 800) => {
+    const key = slugOrName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const map = {
+        't-shirts': 'photo-1521572163474-6864f9cf17ab',
+        hoodies: 'photo-1556821840-3a63f95609a7',
+        jackets: 'photo-1551028719-00167b16eac5',
+        'bottom-wear': 'photo-1624378439575-d8705ad7ae80',
+        tops: 'photo-1434389677669-e08b4cac3105',
+        dresses: 'photo-1595777457583-95e059d581b8',
+        accessories: 'photo-1523170335258-f5ed11844a49',
+        clothes: 'photo-1489987707025-afc232f7ea0f',
+        clothing: 'photo-1489987707025-afc232f7ea0f',
+        caps: 'photo-1588850561407-ed78c282e89b',
+        'tote-bags': 'photo-1590874103328-eac38a683ce7',
+        drinkware: 'photo-1514228742587-6b1558fcca3d',
+        mugs: 'photo-1514228742587-6b1558fcca3d',
+        posters: 'photo-1513519245088-0e12902e35ca',
+        stickers: 'photo-1611532736597-de2d4265fba3',
+        'phone-covers': 'photo-1601784551446-20c9e07cdbdb',
+        sweatshirts: 'photo-1578587018452-892bacefd3f2',
+        'polo-t-shirts': 'photo-1586790170083-2f9ceadc732d',
+    };
+    const id = map[key] || 'photo-1441986300917-64674bd600d8';
+    return `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=80`;
+};
 async function main() {
     console.log('🌱 Seeding VYQOUR database...');
     const adminEmail = process.env.ADMIN_EMAIL || 'admin@vyqour.com';
@@ -56,6 +81,8 @@ async function main() {
     const categoryDefs = [
         { name: 'T-Shirts', slug: 't-shirts', description: 'Premium everyday tees' },
         { name: 'Hoodies', slug: 'hoodies', description: 'Heavyweight comfort' },
+        { name: 'Sweatshirts', slug: 'sweatshirts', description: 'Soft layering essentials' },
+        { name: 'Polo T-Shirts', slug: 'polo-t-shirts', description: 'Clean collar classics' },
         { name: 'Jackets', slug: 'jackets', description: 'Layered luxury' },
         { name: 'Bottom Wear', slug: 'bottom-wear', description: 'Joggers, cargos & more' },
         { name: 'Tops', slug: 'tops', description: 'Elevated tops' },
@@ -64,12 +91,19 @@ async function main() {
     ];
     const categories = {};
     for (const [i, c] of categoryDefs.entries()) {
+        const imageUrl = categoryPhoto(c.slug, 800);
         const cat = await prisma.category.upsert({
             where: { slug: c.slug },
-            update: { name: c.name, description: c.description },
+            update: {
+                name: c.name,
+                description: c.description,
+                imageUrl,
+                sortOrder: i,
+                isActive: true,
+            },
             create: {
                 ...c,
-                imageUrl: placeholder(c.name, 600, 600),
+                imageUrl,
                 sortOrder: i,
                 isActive: true,
             },
@@ -80,6 +114,7 @@ async function main() {
         'Caps',
         'Tote Bags',
         'Drinkware',
+        'Mugs',
         'Mouse Pads',
         'Scarves',
         'Stoles',
@@ -93,17 +128,58 @@ async function main() {
     ];
     for (const [i, name] of accessoryChildren.entries()) {
         const slug = name.toLowerCase().replace(/\s+/g, '-');
+        const imageUrl = categoryPhoto(slug, 600);
         await prisma.category.upsert({
             where: { slug },
-            update: {},
+            update: {
+                name,
+                imageUrl,
+                parentId: categories['accessories'],
+                sortOrder: i,
+                isActive: true,
+            },
             create: {
                 name,
                 slug,
                 parentId: categories['accessories'],
-                imageUrl: placeholder(name, 400, 400),
+                imageUrl,
                 sortOrder: i,
+                isActive: true,
             },
         });
+    }
+    const collectionDefs = [
+        {
+            name: 'Clothes',
+            slug: 'clothes',
+            description: 'Apparel essentials — tees, hoodies, layers and more',
+            imageUrl: categoryPhoto('t-shirts', 900),
+        },
+        {
+            name: 'Accessories',
+            slug: 'accessories',
+            description: 'Caps, totes, phone covers and finishing details',
+            imageUrl: categoryPhoto('accessories', 900),
+        },
+    ];
+    const collections = {};
+    for (const [i, c] of collectionDefs.entries()) {
+        const row = await prisma.collection.upsert({
+            where: { slug: c.slug },
+            update: {
+                name: c.name,
+                description: c.description,
+                imageUrl: c.imageUrl,
+                sortOrder: i,
+                isActive: true,
+            },
+            create: {
+                ...c,
+                sortOrder: i,
+                isActive: true,
+            },
+        });
+        collections[c.slug] = row.id;
     }
     const products = [
         {
@@ -331,8 +407,36 @@ async function main() {
     ];
     for (const p of products) {
         const existing = await prisma.product.findUnique({ where: { slug: p.slug } });
-        if (existing)
+        const resolvedCollectionId = collections[p.collection ||
+            (p.category === 'accessories' ||
+                [
+                    'caps',
+                    'tote-bags',
+                    'drinkware',
+                    'mugs',
+                    'mouse-pads',
+                    'scarves',
+                    'stoles',
+                    'scrunchies',
+                    'dog-tags',
+                    'pendants',
+                    'personalized-pens',
+                    'posters',
+                    'stickers',
+                    'phone-covers',
+                ].includes(p.category)
+                ? 'accessories'
+                : 'clothes')] || undefined;
+        if (existing) {
+            await prisma.product.update({
+                where: { id: existing.id },
+                data: {
+                    categoryId: categories[p.category] || existing.categoryId,
+                    collectionId: resolvedCollectionId ?? existing.collectionId,
+                },
+            });
             continue;
+        }
         const product = await prisma.product.create({
             data: {
                 name: p.name,
@@ -342,6 +446,11 @@ async function main() {
                 basePrice: p.price,
                 compareAtPrice: p.compare,
                 categoryId: categories[p.category],
+                collectionId: collections[p.collection ||
+                    (p.category === 'accessories' ||
+                        ['caps', 'tote-bags', 'drinkware', 'mouse-pads', 'scarves', 'stoles', 'scrunchies', 'dog-tags', 'pendants', 'personalized-pens', 'posters', 'stickers', 'phone-covers'].includes(p.category)
+                        ? 'accessories'
+                        : 'clothes')] || undefined,
                 status: client_1.ProductStatus.ACTIVE,
                 qikinkSku: undefined,
                 qikinkPrintTypeId: p.category === 'accessories' ? 5 : 1,

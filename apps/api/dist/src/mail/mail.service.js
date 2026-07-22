@@ -40,7 +40,12 @@ let MailService = MailService_1 = class MailService {
             this.logger.log(`[email:dev] to=${to} subject=${subject}`);
             return;
         }
-        await this.transporter.sendMail({ from: this.from, to, subject, html });
+        try {
+            await this.transporter.sendMail({ from: this.from, to, subject, html });
+        }
+        catch (err) {
+            this.logger.error(`Failed to send email to=${to} subject=${subject}: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
     async sendVerificationEmail(email, token) {
         const webUrl = this.config.get('webUrl');

@@ -21,6 +21,7 @@ const auth_module_1 = require("./modules/auth/auth.module");
 const users_module_1 = require("./modules/users/users.module");
 const products_module_1 = require("./modules/products/products.module");
 const categories_module_1 = require("./modules/categories/categories.module");
+const collections_module_1 = require("./modules/collections/collections.module");
 const cart_module_1 = require("./modules/cart/cart.module");
 const wishlist_module_1 = require("./modules/wishlist/wishlist.module");
 const orders_module_1 = require("./modules/orders/orders.module");
@@ -64,6 +65,7 @@ exports.AppModule = AppModule = __decorate([
             users_module_1.UsersModule,
             products_module_1.ProductsModule,
             categories_module_1.CategoriesModule,
+            collections_module_1.CollectionsModule,
             cart_module_1.CartModule,
             wishlist_module_1.WishlistModule,
             orders_module_1.OrdersModule,

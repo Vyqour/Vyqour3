@@ -11,6 +11,7 @@ export declare class ProductsController {
                 name: string;
                 slug: string;
             };
+            collection: never;
             images: {
                 id: string;
                 sortOrder: number;
@@ -106,6 +107,7 @@ export declare class ProductsController {
                 name: string;
                 slug: string;
             };
+            collection: never;
             images: {
                 id: string;
                 sortOrder: number;
@@ -209,9 +211,9 @@ export declare class ProductsController {
             images: string[];
             productId: string;
             title: string | null;
-            rating: number;
             isApproved: boolean;
             body: string;
+            rating: number;
             isVerified: boolean;
             helpfulCount: number;
         })[];
@@ -220,6 +222,7 @@ export declare class ProductsController {
             name: string;
             slug: string;
         };
+        collection: never;
         images: {
             id: string;
             sortOrder: number;
@@ -304,6 +307,7 @@ export declare class ProductsController {
             name: string;
             slug: string;
         };
+        collection: never;
         images: {
             id: string;
             sortOrder: number;
@@ -383,49 +387,6 @@ export declare class ProductsController {
         publishedAt: Date | null;
     })[]>;
     create(dto: CreateProductDto): Promise<{
-        category: {
-            id: string;
-            name: string;
-            slug: string;
-        };
-        images: {
-            id: string;
-            sortOrder: number;
-            url: string;
-            publicId: string | null;
-            alt: string | null;
-            isPrimary: boolean;
-            productId: string;
-        }[];
-        variants: {
-            id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            imageUrl: string | null;
-            isActive: boolean;
-            sku: string;
-            compareAtPrice: import("@prisma/client/runtime/library").Decimal | null;
-            weightGrams: number | null;
-            qikinkSku: string | null;
-            size: string | null;
-            color: string | null;
-            colorHex: string | null;
-            price: import("@prisma/client/runtime/library").Decimal | null;
-            stock: number;
-            lowStockAt: number;
-            qikinkPrice: import("@prisma/client/runtime/library").Decimal | null;
-            productId: string;
-        }[];
-        inventory: {
-            id: string;
-            updatedAt: Date;
-            quantity: number;
-            productId: string;
-            reserved: number;
-            lowStockThreshold: number;
-            trackInventory: boolean;
-        } | null;
-    } & {
         id: string;
         status: import(".prisma/client").$Enums.ProductStatus;
         createdAt: Date;
@@ -472,6 +433,7 @@ export declare class ProductsController {
             name: string;
             slug: string;
         };
+        collection: never;
         images: {
             id: string;
             sortOrder: number;
@@ -550,7 +512,7 @@ export declare class ProductsController {
         qikinkSyncedAt: Date | null;
         publishedAt: Date | null;
     }>;
-    remove(id: string): Promise<{
+    remove(id: string, hard?: string): Promise<{
         message: string;
     }>;
 }

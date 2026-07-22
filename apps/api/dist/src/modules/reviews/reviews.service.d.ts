@@ -18,9 +18,9 @@ export declare class ReviewsService {
             images: string[];
             productId: string;
             title: string | null;
-            rating: number;
             isApproved: boolean;
             body: string;
+            rating: number;
             isVerified: boolean;
             helpfulCount: number;
         })[];
@@ -46,9 +46,9 @@ export declare class ReviewsService {
         images: string[];
         productId: string;
         title: string | null;
-        rating: number;
         isApproved: boolean;
         body: string;
+        rating: number;
         isVerified: boolean;
         helpfulCount: number;
     }>;
@@ -73,9 +73,9 @@ export declare class ReviewsService {
             images: string[];
             productId: string;
             title: string | null;
-            rating: number;
             isApproved: boolean;
             body: string;
+            rating: number;
             isVerified: boolean;
             helpfulCount: number;
         })[];
@@ -96,9 +96,9 @@ export declare class ReviewsService {
         images: string[];
         productId: string;
         title: string | null;
-        rating: number;
         isApproved: boolean;
         body: string;
+        rating: number;
         isVerified: boolean;
         helpfulCount: number;
     }>;

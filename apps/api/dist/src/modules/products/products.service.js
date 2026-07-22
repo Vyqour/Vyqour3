@@ -20,6 +20,7 @@ const productInclude = {
     images: { orderBy: { sortOrder: 'asc' } },
     variants: { where: { isActive: true } },
     category: { select: { id: true, name: true, slug: true } },
+    collection: { select: { id: true, name: true, slug: true } },
     inventory: true,
 };
 let ProductsService = class ProductsService {
@@ -38,6 +39,9 @@ let ProductsService = class ProductsService {
             where.status = query.status;
         if (query.category) {
             where.category = { slug: query.category };
+        }
+        if (query.collection) {
+            where.collection = { slug: query.collection };
         }
         if (query.search) {
             where.OR = [
@@ -161,6 +165,7 @@ let ProductsService = class ProductsService {
                 basePrice: dto.basePrice,
                 compareAtPrice: dto.compareAtPrice,
                 categoryId: dto.categoryId,
+                collectionId: dto.collectionId || undefined,
                 status: dto.status || client_1.ProductStatus.DRAFT,
                 isFeatured: dto.isFeatured ?? false,
                 isNewArrival: dto.isNewArrival ?? false,
@@ -230,6 +235,12 @@ let ProductsService = class ProductsService {
         };
         if (dto.categoryId)
             data.category = { connect: { id: dto.categoryId } };
+        if (dto.collectionId !== undefined) {
+            if (!dto.collectionId)
+                data.collection = { disconnect: true };
+            else
+                data.collection = { connect: { id: dto.collectionId } };
+        }
         if (dto.name && !dto.slug)
             data.slug = (0, slug_util_1.slugify)(dto.name);
         if (dto.slug)
@@ -245,10 +256,28 @@ let ProductsService = class ProductsService {
         await this.redis.delByPattern('products:*');
         return product;
     }
-    async remove(id) {
+    async remove(id, hard = false) {
         const existing = await this.prisma.product.findUnique({ where: { id } });
         if (!existing)
             throw new common_1.NotFoundException('Product not found');
+        if (hard) {
+            await this.prisma.$transaction(async (tx) => {
+                await tx.productImage.deleteMany({ where: { productId: id } });
+                await tx.productVariant.deleteMany({ where: { productId: id } });
+                await tx.inventory.deleteMany({ where: { productId: id } });
+                await tx.recentlyViewed.deleteMany({ where: { productId: id } });
+                await tx.review.deleteMany({ where: { productId: id } });
+                await tx.cartItem.deleteMany({ where: { productId: id } });
+                await tx.wishlistItem.deleteMany({ where: { productId: id } });
+                const ordered = await tx.orderItem.count({ where: { productId: id } });
+                if (ordered > 0) {
+                    throw new common_1.ConflictException('Cannot permanently delete a product that appears on orders. Archive it instead.');
+                }
+                await tx.product.delete({ where: { id } });
+            });
+            await this.redis.delByPattern('products:*');
+            return { message: 'Product deleted permanently' };
+        }
         await this.prisma.product.update({
             where: { id },
             data: { status: client_1.ProductStatus.ARCHIVED },

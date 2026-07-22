@@ -13,6 +13,7 @@ export declare class ProductsService {
                 name: string;
                 slug: string;
             };
+            collection: never;
             images: {
                 id: string;
                 sortOrder: number;
@@ -116,9 +117,9 @@ export declare class ProductsService {
             images: string[];
             productId: string;
             title: string | null;
-            rating: number;
             isApproved: boolean;
             body: string;
+            rating: number;
             isVerified: boolean;
             helpfulCount: number;
         })[];
@@ -127,6 +128,7 @@ export declare class ProductsService {
             name: string;
             slug: string;
         };
+        collection: never;
         images: {
             id: string;
             sortOrder: number;
@@ -211,6 +213,7 @@ export declare class ProductsService {
             name: string;
             slug: string;
         };
+        collection: never;
         images: {
             id: string;
             sortOrder: number;
@@ -290,49 +293,6 @@ export declare class ProductsService {
         publishedAt: Date | null;
     })[]>;
     create(dto: CreateProductDto): Promise<{
-        category: {
-            id: string;
-            name: string;
-            slug: string;
-        };
-        images: {
-            id: string;
-            sortOrder: number;
-            url: string;
-            publicId: string | null;
-            alt: string | null;
-            isPrimary: boolean;
-            productId: string;
-        }[];
-        variants: {
-            id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            imageUrl: string | null;
-            isActive: boolean;
-            sku: string;
-            compareAtPrice: Prisma.Decimal | null;
-            weightGrams: number | null;
-            qikinkSku: string | null;
-            size: string | null;
-            color: string | null;
-            colorHex: string | null;
-            price: Prisma.Decimal | null;
-            stock: number;
-            lowStockAt: number;
-            qikinkPrice: Prisma.Decimal | null;
-            productId: string;
-        }[];
-        inventory: {
-            id: string;
-            updatedAt: Date;
-            quantity: number;
-            productId: string;
-            reserved: number;
-            lowStockThreshold: number;
-            trackInventory: boolean;
-        } | null;
-    } & {
         id: string;
         status: import(".prisma/client").$Enums.ProductStatus;
         createdAt: Date;
@@ -379,6 +339,7 @@ export declare class ProductsService {
             name: string;
             slug: string;
         };
+        collection: never;
         images: {
             id: string;
             sortOrder: number;
@@ -457,7 +418,7 @@ export declare class ProductsService {
         qikinkSyncedAt: Date | null;
         publishedAt: Date | null;
     }>;
-    remove(id: string): Promise<{
+    remove(id: string, hard?: boolean): Promise<{
         message: string;
     }>;
     homeSections(): Promise<{}>;

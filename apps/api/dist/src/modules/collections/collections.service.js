@@ -9,90 +9,66 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CategoriesService = void 0;
+exports.CollectionsService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const redis_service_1 = require("../../redis/redis.service");
 const slug_util_1 = require("../../common/utils/slug.util");
-let CategoriesService = class CategoriesService {
+let CollectionsService = class CollectionsService {
     constructor(prisma, redis) {
         this.prisma = prisma;
         this.redis = redis;
     }
     async findAll(includeInactive = false) {
-        const cacheKey = `categories:all:${includeInactive}`;
+        const cacheKey = `collections:all:${includeInactive}`;
         const cached = await this.redis.get(cacheKey);
         if (cached)
             return cached;
-        const categories = await this.prisma.category.findMany({
+        const collections = await this.prisma.collection.findMany({
             where: includeInactive ? undefined : { isActive: true },
             orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-            include: {
-                children: {
-                    where: includeInactive ? undefined : { isActive: true },
-                    orderBy: { sortOrder: 'asc' },
-                },
-                _count: { select: { products: true } },
-            },
+            include: { _count: { select: { products: true } } },
         });
-        const roots = categories.filter((c) => !c.parentId);
-        await this.redis.set(cacheKey, roots, 600);
-        return roots;
+        await this.redis.set(cacheKey, collections, 600);
+        return collections;
     }
     async findBySlug(slug) {
-        const category = await this.prisma.category.findUnique({
+        const collection = await this.prisma.collection.findUnique({
             where: { slug },
-            include: {
-                children: { where: { isActive: true }, orderBy: { sortOrder: 'asc' } },
-                parent: true,
-                _count: { select: { products: true } },
-            },
+            include: { _count: { select: { products: true } } },
         });
-        if (!category || !category.isActive)
-            throw new common_1.NotFoundException('Category not found');
-        return category;
+        if (!collection || !collection.isActive)
+            throw new common_1.NotFoundException('Collection not found');
+        return collection;
     }
     async create(dto) {
         const slug = dto.slug || (0, slug_util_1.slugify)(dto.name);
-        const exists = await this.prisma.category.findUnique({ where: { slug } });
+        const exists = await this.prisma.collection.findUnique({ where: { slug } });
         if (exists)
-            throw new common_1.ConflictException('Category slug already exists');
-        if (dto.parentId) {
-            const parent = await this.prisma.category.findUnique({ where: { id: dto.parentId } });
-            if (!parent)
-                throw new common_1.NotFoundException('Parent category not found');
-        }
-        const category = await this.prisma.category.create({
+            throw new common_1.ConflictException('Collection slug already exists');
+        const collection = await this.prisma.collection.create({
             data: {
                 name: dto.name,
                 slug,
                 description: dto.description,
                 imageUrl: dto.imageUrl,
-                parentId: dto.parentId,
                 sortOrder: dto.sortOrder ?? 0,
                 seoTitle: dto.seoTitle,
                 seoDescription: dto.seoDescription,
                 isActive: dto.isActive ?? true,
             },
         });
-        await this.redis.delByPattern('categories:*');
-        return category;
+        await this.redis.delByPattern('collections:*');
+        return collection;
     }
     async update(id, dto) {
         await this.ensureExists(id);
-        if (dto.parentId) {
-            if (dto.parentId === id)
-                throw new common_1.ConflictException('Category cannot be its own parent');
-            const parent = await this.prisma.category.findUnique({ where: { id: dto.parentId } });
-            if (!parent)
-                throw new common_1.NotFoundException('Parent category not found');
-        }
         if (dto.slug) {
-            const clash = await this.prisma.category.findFirst({
+            const clash = await this.prisma.collection.findFirst({
                 where: { slug: dto.slug, NOT: { id } },
             });
             if (clash)
-                throw new common_1.ConflictException('Category slug already exists');
+                throw new common_1.ConflictException('Collection slug already exists');
         }
         const data = {};
         if (dto.name !== undefined)
@@ -113,35 +89,29 @@ let CategoriesService = class CategoriesService {
             data.seoDescription = dto.seoDescription;
         if (dto.isActive !== undefined)
             data.isActive = dto.isActive;
-        if (dto.parentId !== undefined) {
-            if (!dto.parentId) {
-                data.parent = { disconnect: true };
-            }
-            else {
-                data.parent = { connect: { id: dto.parentId } };
-            }
-        }
-        const category = await this.prisma.category.update({ where: { id }, data });
-        await this.redis.delByPattern('categories:*');
-        return category;
+        const collection = await this.prisma.collection.update({ where: { id }, data });
+        await this.redis.delByPattern('collections:*');
+        await this.redis.delByPattern('products:*');
+        return collection;
     }
     async remove(id) {
         await this.ensureExists(id);
-        await this.prisma.category.update({ where: { id }, data: { isActive: false } });
-        await this.redis.delByPattern('categories:*');
-        return { message: 'Category archived' };
+        await this.prisma.collection.update({ where: { id }, data: { isActive: false } });
+        await this.redis.delByPattern('collections:*');
+        await this.redis.delByPattern('products:*');
+        return { message: 'Collection archived' };
     }
     async ensureExists(id) {
-        const cat = await this.prisma.category.findUnique({ where: { id } });
-        if (!cat)
-            throw new common_1.NotFoundException('Category not found');
-        return cat;
+        const row = await this.prisma.collection.findUnique({ where: { id } });
+        if (!row)
+            throw new common_1.NotFoundException('Collection not found');
+        return row;
     }
 };
-exports.CategoriesService = CategoriesService;
-exports.CategoriesService = CategoriesService = __decorate([
+exports.CollectionsService = CollectionsService;
+exports.CollectionsService = CollectionsService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         redis_service_1.RedisService])
-], CategoriesService);
-//# sourceMappingURL=categories.service.js.map
+], CollectionsService);
+//# sourceMappingURL=collections.service.js.map

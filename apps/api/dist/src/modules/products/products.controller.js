@@ -46,8 +46,8 @@ let ProductsController = class ProductsController {
     update(id, dto) {
         return this.products.update(id, dto);
     }
-    remove(id) {
-        return this.products.remove(id);
+    remove(id, hard) {
+        return this.products.remove(id, hard === 'true' || hard === '1');
     }
 };
 exports.ProductsController = ProductsController;
@@ -116,8 +116,9 @@ __decorate([
     (0, swagger_1.ApiBearerAuth)(),
     (0, roles_decorator_1.Roles)(client_1.Role.ADMIN, client_1.Role.SUPER_ADMIN),
     __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Query)('hard')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", void 0)
 ], ProductsController.prototype, "remove", null);
 exports.ProductsController = ProductsController = __decorate([

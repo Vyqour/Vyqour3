@@ -24,6 +24,7 @@ export declare class CreateProductDto {
     basePrice: number;
     compareAtPrice?: number;
     categoryId: string;
+    collectionId?: string;
     status?: ProductStatus;
     isFeatured?: boolean;
     isNewArrival?: boolean;
@@ -42,6 +43,7 @@ export declare class UpdateProductDto extends UpdateProductDto_base {
 }
 export declare class ProductQueryDto extends PaginationDto {
     category?: string;
+    collection?: string;
     minPrice?: string;
     maxPrice?: string;
     sizes?: string;

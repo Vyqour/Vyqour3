@@ -86,7 +86,11 @@ let AuthService = class AuthService {
                 expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
             },
         });
-        await this.mail.sendVerificationEmail(user.email, verifyToken);
+        try {
+            await this.mail.sendVerificationEmail(user.email, verifyToken);
+        }
+        catch {
+        }
         const accessToken = this.signAccess(user);
         const refreshToken = await this.issueRefreshToken(user.id);
         return {
