@@ -31,9 +31,13 @@ export interface Collection {
   slug: string;
   description?: string | null;
   imageUrl?: string | null;
+  bannerUrl?: string | null;
+  featuredImageUrl?: string | null;
   isActive?: boolean;
+  isFeatured?: boolean;
   sortOrder?: number;
   _count?: { products: number };
+  products?: Product[];
 }
 
 export interface ProductImage {

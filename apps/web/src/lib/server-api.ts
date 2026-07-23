@@ -23,7 +23,7 @@ export async function serverFetch<T = unknown>(
     const url = `${API_URL}${path.startsWith('/') ? path : `/${path}`}`;
     const res = await fetch(url, {
       ...init,
-      next: { revalidate: 60 },
+      next: { revalidate: 30 },
       headers: {
         'Content-Type': 'application/json',
         ...(init?.headers || {}),

@@ -2,7 +2,11 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { CollectionsService } from './collections.service';
-import { CreateCollectionDto, UpdateCollectionDto } from './dto/collection.dto';
+import {
+  CreateCollectionDto,
+  SetCollectionProductsDto,
+  UpdateCollectionDto,
+} from './dto/collection.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 
@@ -13,8 +17,17 @@ export class CollectionsController {
 
   @Public()
   @Get()
-  findAll(@Query('all') all?: string) {
+  findAll(@Query('all') all?: string, @Query('featured') featured?: string) {
+    if (featured === 'true') return this.collections.findFeatured();
     return this.collections.findAll(all === 'true');
+  }
+
+  // Static paths before :slug
+  @Get('admin/:id/products')
+  @ApiBearerAuth()
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  adminProducts(@Param('id') id: string) {
+    return this.collections.listProducts(id);
   }
 
   @Public()
@@ -35,6 +48,13 @@ export class CollectionsController {
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   update(@Param('id') id: string, @Body() dto: UpdateCollectionDto) {
     return this.collections.update(id, dto);
+  }
+
+  @Post(':id/products')
+  @ApiBearerAuth()
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  setProducts(@Param('id') id: string, @Body() dto: SetCollectionProductsDto) {
+    return this.collections.setProducts(id, dto.productIds || []);
   }
 
   @Delete(':id')

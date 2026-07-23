@@ -6,7 +6,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 
 @ApiTags('admin')
 @ApiBearerAuth()
-@Roles(Role.ADMIN, Role.SUPER_ADMIN)
+@Roles(Role.ADMIN, Role.SUPER_ADMIN, Role.SUPPORT)
 @Controller('admin')
 export class AdminController {
   constructor(private readonly admin: AdminService) {}

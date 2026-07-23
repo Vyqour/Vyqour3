@@ -239,22 +239,29 @@ model Category {
 
 
 model Collection {
-  id             String    @id @default(cuid())
-  name           String
-  slug           String    @unique
-  description    String?
-  imageUrl       String?
-  isActive       Boolean   @default(true)
-  sortOrder      Int       @default(0)
-  seoTitle       String?
-  seoDescription String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id               String    @id @default(cuid())
+  name             String
+  slug             String    @unique
+  description      String?
+  imageUrl         String?
+  /// Large banner for collection landing / homepage
+  bannerUrl        String?
+  /// Card / featured thumbnail (falls back to imageUrl)
+  featuredImageUrl String?
+  isActive         Boolean   @default(true)
+  /// Show in homepage featured collections rail
+  isFeatured       Boolean   @default(false)
+  sortOrder        Int       @default(0)
+  seoTitle         String?
+  seoDescription   String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  products       Product[]
+  products         Product[]
 
   @@index([slug])
   @@index([isActive])
+  @@index([isFeatured])
   @@map("collections")
 }
 

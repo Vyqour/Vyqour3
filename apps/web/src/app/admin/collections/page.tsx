@@ -17,10 +17,15 @@ type CollectionRow = {
   slug: string;
   description?: string | null;
   imageUrl?: string | null;
+  bannerUrl?: string | null;
+  featuredImageUrl?: string | null;
   isActive?: boolean;
+  isFeatured?: boolean;
   sortOrder?: number;
   _count?: { products: number };
 };
+
+type ProductOpt = { id: string; name: string; slug: string; status?: string };
 
 type Draft = {
   id?: string;
@@ -28,8 +33,12 @@ type Draft = {
   slug: string;
   description: string;
   imageUrl: string;
+  bannerUrl: string;
+  featuredImageUrl: string;
   isActive: boolean;
+  isFeatured: boolean;
   sortOrder: string;
+  productIds: string[];
   saving?: boolean;
 };
 
@@ -39,20 +48,28 @@ function emptyDraft(): Draft {
     slug: '',
     description: '',
     imageUrl: '',
+    bannerUrl: '',
+    featuredImageUrl: '',
     isActive: true,
+    isFeatured: false,
     sortOrder: '0',
+    productIds: [],
   };
 }
 
-function toDraft(c: CollectionRow): Draft {
+function toDraft(c: CollectionRow, productIds: string[] = []): Draft {
   return {
     id: c.id,
     name: c.name || '',
     slug: c.slug || '',
     description: c.description || '',
     imageUrl: c.imageUrl || '',
+    bannerUrl: c.bannerUrl || '',
+    featuredImageUrl: c.featuredImageUrl || '',
     isActive: c.isActive !== false,
+    isFeatured: !!c.isFeatured,
     sortOrder: String(c.sortOrder ?? 0),
+    productIds,
   };
 }
 
@@ -76,17 +93,23 @@ function slugify(value: string): string {
 
 export default function AdminCollectionsPage() {
   const [rows, setRows] = useState<CollectionRow[]>([]);
+  const [products, setProducts] = useState<ProductOpt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [editing, setEditing] = useState<Draft | null>(null);
   const [filter, setFilter] = useState('');
+  const [draft, setDraft] = useState<Draft | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await apiClient.get<unknown>('/collections?all=true', { auth: true });
-      setRows(unwrapList<CollectionRow>(res));
+      const [colRes, prodRes] = await Promise.all([
+        apiClient.get('/collections?all=true', { auth: true }),
+        apiClient.get('/products/admin/all?limit=100', { auth: true }),
+      ]);
+      setRows(unwrapList<CollectionRow>(colRes));
+      const prods = unwrapList<ProductOpt>(prodRes);
+      setProducts(prods.map((p) => ({ id: p.id, name: p.name, slug: p.slug, status: (p as { status?: string }).status })));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load collections');
     } finally {
@@ -98,77 +121,90 @@ export default function AdminCollectionsPage() {
     void load();
   }, [load]);
 
-  const flat = rows;
-
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return flat;
-    return flat.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.slug.toLowerCase().includes(q) ||
-        (c.description || '').toLowerCase().includes(q),
+    if (!q) return rows;
+    return rows.filter(
+      (r) => r.name.toLowerCase().includes(q) || r.slug.toLowerCase().includes(q),
     );
-  }, [flat, filter]);
+  }, [rows, filter]);
 
-  const openCreate = () => {
-    setEditing(emptyDraft());
+  const openCreate = () => setDraft(emptyDraft());
+
+  const openEdit = async (c: CollectionRow) => {
+    let productIds: string[] = [];
+    try {
+      const list = await apiClient.get<ProductOpt[]>(`/collections/admin/${c.id}/products`, {
+        auth: true,
+      });
+      productIds = unwrapList<ProductOpt>(list).map((p) => p.id);
+    } catch {
+      // fallback: match from loaded products by collection if present
+      productIds = [];
+    }
+    setDraft(toDraft(c, productIds));
   };
 
-  const openEdit = (c: CollectionRow) => {
-    setEditing(toDraft(c));
-  };
-
-  const closeEditor = () => setEditing(null);
+  const closeDraft = () => setDraft(null);
 
   const save = async () => {
-    if (!editing) return;
-    const name = editing.name.trim();
-    if (!name) {
-      toast.error('Collection name is required');
+    if (!draft) return;
+    if (!draft.name.trim()) {
+      toast.error('Name is required');
       return;
     }
-
+    setDraft({ ...draft, saving: true });
     const payload = {
-      name,
-      slug: editing.slug.trim() || slugify(name),
-      description: editing.description.trim() || undefined,
-      imageUrl: editing.imageUrl.trim() || undefined,
-      isActive: editing.isActive,
-      sortOrder: Number.isFinite(Number(editing.sortOrder)) ? Number(editing.sortOrder) : 0,
+      name: draft.name.trim(),
+      slug: draft.slug.trim() || slugify(draft.name),
+      description: draft.description.trim() || undefined,
+      imageUrl: draft.imageUrl.trim() || undefined,
+      bannerUrl: draft.bannerUrl.trim() || undefined,
+      featuredImageUrl: draft.featuredImageUrl.trim() || undefined,
+      isActive: draft.isActive,
+      isFeatured: draft.isFeatured,
+      sortOrder: Number(draft.sortOrder) || 0,
+      productIds: draft.productIds,
     };
-
-    setEditing((d) => (d ? { ...d, saving: true } : d));
     try {
-      if (editing.id) {
-        await apiClient.patch(`/collections/${editing.id}`, payload, { auth: true });
-        toast.success(`Updated “${name}”`);
+      if (draft.id) {
+        await apiClient.patch(`/collections/${draft.id}`, payload, { auth: true });
+        toast.success('Collection updated');
       } else {
         await apiClient.post('/collections', payload, { auth: true });
-        toast.success(`Created “${name}”`);
+        toast.success('Collection created');
       }
-      setEditing(null);
+      setDraft(null);
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Save failed');
-      setEditing((d) => (d ? { ...d, saving: false } : d));
+      setDraft({ ...draft, saving: false });
     }
   };
 
   const remove = async (c: CollectionRow) => {
     const productCount = c._count?.products ?? 0;
     const label = productCount
-      ? `Archive “${c.name}”? It has ${productCount} product(s). Products keep their assignment; the collection is hidden from the storefront.`
-      : `Archive “${c.name}”? It will be set inactive and hidden from the storefront.`;
+      ? `Archive “${c.name}”? It has ${productCount} product(s). Products keep history; the collection is hidden.`
+      : `Archive “${c.name}”?`;
     if (!confirm(label)) return;
     try {
       await apiClient.delete(`/collections/${c.id}`, { auth: true });
-      toast.success(`Archived “${c.name}”`);
-      if (editing?.id === c.id) setEditing(null);
+      toast.success('Collection archived');
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Delete failed');
     }
+  };
+
+  const toggleProduct = (id: string) => {
+    if (!draft) return;
+    setDraft({
+      ...draft,
+      productIds: draft.productIds.includes(id)
+        ? draft.productIds.filter((x) => x !== id)
+        : [...draft.productIds, id],
+    });
   };
 
   if (loading) {
@@ -178,211 +214,204 @@ export default function AdminCollectionsPage() {
       </div>
     );
   }
-
-  if (error) {
-    return (
-      <div className="space-y-3">
-        <p className="text-red-400">{error}</p>
-        <Button type="button" onClick={() => void load()}>
-          Retry
-        </Button>
-      </div>
-    );
-  }
+  if (error) return <p className="text-red-400">{error}</p>;
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-white">Collections</h2>
-          <p className="mt-1 text-sm text-white/50">
-            Add, edit, or archive collections (e.g. Clothes, Accessories). Assign products from the Products page.
+          <h2 className="text-xl font-medium">Collections</h2>
+          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+            Add, edit, or archive collections. Assign products, banners, and homepage featured state. Storefront
+            Collections page reads this live from the API.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" onClick={openCreate} className="gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Input
+            className="w-48"
+            placeholder="Search…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+          <Button type="button" className="gap-2" onClick={openCreate}>
             <Plus className="h-4 w-4" />
             Add collection
           </Button>
-          <Button type="button" variant="ghost" onClick={() => void load()}>
-            Refresh
-          </Button>
         </div>
       </div>
 
-      <Input
-        placeholder="Search name, slug…"
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        className="sm:max-w-xs"
-      />
-
-      {editing && (
-        <div className="glass space-y-4 rounded-2xl border border-white/10 p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="font-medium text-white">
-              {editing.id ? 'Edit collection' : 'New collection'}
-            </h3>
-            <Button type="button" size="icon" variant="ghost" onClick={closeEditor} title="Close">
-              <X className="h-4 w-4" />
-            </Button>
+      {draft && (
+        <div className="glass space-y-4 rounded-2xl p-5">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium">{draft.id ? 'Edit collection' : 'New collection'}</h3>
+            <button type="button" onClick={closeDraft} className="text-muted-foreground hover:text-white">
+              <X className="h-5 w-5" />
+            </button>
           </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-2">
             <label className="block space-y-1.5">
-              <span className="text-xs font-medium uppercase tracking-wide text-white/45">
-                Name *
-              </span>
+              <span className="text-xs uppercase text-white/45">Name</span>
               <Input
-                value={editing.name}
-                onChange={(e) => {
-                  const name = e.target.value;
-                  setEditing((d) =>
-                    d
-                      ? {
-                          ...d,
-                          name,
-                          slug: d.id ? d.slug : d.slug || slugify(name),
-                        }
-                      : d,
-                  );
-                }}
-                placeholder="e.g. T-Shirts"
-              />
-            </label>
-            <label className="block space-y-1.5">
-              <span className="text-xs font-medium uppercase tracking-wide text-white/45">Slug</span>
-              <Input
-                value={editing.slug}
-                onChange={(e) => setEditing((d) => (d ? { ...d, slug: e.target.value } : d))}
-                placeholder="t-shirts"
-              />
-            </label>
-            <label className="block space-y-1.5 md:col-span-2">
-              <span className="text-xs font-medium uppercase tracking-wide text-white/45">
-                Description
-              </span>
-              <Textarea
-                value={editing.description}
+                value={draft.name}
                 onChange={(e) =>
-                  setEditing((d) => (d ? { ...d, description: e.target.value } : d))
+                  setDraft({
+                    ...draft,
+                    name: e.target.value,
+                    slug: draft.id ? draft.slug : slugify(e.target.value),
+                  })
                 }
-                rows={2}
-                placeholder="Short blurb for SEO / admin"
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs uppercase text-white/45">Slug</span>
+              <Input value={draft.slug} onChange={(e) => setDraft({ ...draft, slug: e.target.value })} />
+            </label>
+            <label className="block space-y-1.5 md:col-span-2">
+              <span className="text-xs uppercase text-white/45">Description</span>
+              <Textarea
+                value={draft.description}
+                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                rows={3}
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs uppercase text-white/45">Card image URL</span>
+              <Input
+                value={draft.imageUrl}
+                onChange={(e) => setDraft({ ...draft, imageUrl: e.target.value })}
+                placeholder="https://…"
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs uppercase text-white/45">Featured image URL</span>
+              <Input
+                value={draft.featuredImageUrl}
+                onChange={(e) => setDraft({ ...draft, featuredImageUrl: e.target.value })}
               />
             </label>
             <label className="block space-y-1.5 md:col-span-2">
-              <span className="text-xs font-medium uppercase tracking-wide text-white/45">
-                Image URL
-              </span>
+              <span className="text-xs uppercase text-white/45">Banner URL</span>
               <Input
-                value={editing.imageUrl}
-                onChange={(e) => setEditing((d) => (d ? { ...d, imageUrl: e.target.value } : d))}
-                placeholder="https://… (optional — storefront uses mapped photos if empty)"
+                value={draft.bannerUrl}
+                onChange={(e) => setDraft({ ...draft, bannerUrl: e.target.value })}
               />
-              <div className="mt-2 h-24 w-24 overflow-hidden rounded-xl border border-white/10 bg-black/40">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={resolveCategoryImage({
-                    name: editing.name || 'Collection',
-                    slug: editing.slug,
-                    imageUrl: editing.imageUrl || null,
-                  })}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-              </div>
             </label>
             <label className="block space-y-1.5">
-              <span className="text-xs font-medium uppercase tracking-wide text-white/45">
-                Sort order
-              </span>
+              <span className="text-xs uppercase text-white/45">Display order</span>
               <Input
                 type="number"
-                min={0}
-                value={editing.sortOrder}
-                onChange={(e) => setEditing((d) => (d ? { ...d, sortOrder: e.target.value } : d))}
+                value={draft.sortOrder}
+                onChange={(e) => setDraft({ ...draft, sortOrder: e.target.value })}
               />
             </label>
-            <label className="flex items-center gap-3 pt-6">
-              <input
-                type="checkbox"
-                checked={editing.isActive}
-                onChange={(e) =>
-                  setEditing((d) => (d ? { ...d, isActive: e.target.checked } : d))
-                }
-                className="h-4 w-4 rounded border-white/20 bg-white/5"
-              />
-              <span className="text-sm text-white/80">Active (visible on storefront)</span>
-            </label>
+            <div className="flex flex-wrap items-center gap-4 pt-6">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="accent-primary"
+                  checked={draft.isActive}
+                  onChange={(e) => setDraft({ ...draft, isActive: e.target.checked })}
+                />
+                Active
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="accent-primary"
+                  checked={draft.isFeatured}
+                  onChange={(e) => setDraft({ ...draft, isFeatured: e.target.checked })}
+                />
+                Featured on homepage
+              </label>
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => void save()} disabled={editing.saving} className="gap-2">
-              {editing.saving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
+          <div>
+            <p className="mb-2 text-xs uppercase text-white/45">
+              Products in collection ({draft.productIds.length})
+            </p>
+            <div className="max-h-48 overflow-y-auto rounded-xl border border-white/10 p-3">
+              {products.length === 0 && (
+                <p className="text-sm text-muted-foreground">No products yet — create products first.</p>
               )}
-              {editing.id ? 'Save changes' : 'Create collection'}
-            </Button>
-            <Button type="button" variant="secondary" onClick={closeEditor}>
+              <div className="grid gap-1 sm:grid-cols-2">
+                {products.map((p) => (
+                  <label key={p.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-white/5">
+                    <input
+                      type="checkbox"
+                      className="accent-primary"
+                      checked={draft.productIds.includes(p.id)}
+                      onChange={() => toggleProduct(p.id)}
+                    />
+                    <span className="truncate">{p.name}</span>
+                    {p.status && p.status !== 'ACTIVE' && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {p.status}
+                      </Badge>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={closeDraft}>
               Cancel
+            </Button>
+            <Button type="button" className="gap-2" disabled={draft.saving} onClick={() => void save()}>
+              {draft.saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save
             </Button>
           </div>
         </div>
       )}
 
       <div className="glass overflow-x-auto rounded-2xl p-5">
-        <h3 className="mb-4 font-medium">All collections ({visible.length})</h3>
         <table className="w-full text-left text-sm">
           <thead className="text-xs uppercase text-muted-foreground">
             <tr>
-              <th className="pb-3 pr-4">Image</th>
-              <th className="pb-3 pr-4">Name</th>
-              <th className="pb-3 pr-4">Slug</th>
+              <th className="pb-3 pr-4">Collection</th>
               <th className="pb-3 pr-4">Status</th>
+              <th className="pb-3 pr-4">Featured</th>
+              <th className="pb-3 pr-4">Order</th>
               <th className="pb-3 pr-4">Products</th>
-              <th className="pb-3 pr-4 text-right">Actions</th>
+              <th className="pb-3">Actions</th>
             </tr>
           </thead>
           <tbody>
             {visible.map((c) => {
-              const img = resolveCategoryImage(c);
+              const thumb = resolveCategoryImage(
+                {
+                  name: c.name,
+                  slug: c.slug,
+                  imageUrl: c.featuredImageUrl || c.imageUrl,
+                },
+                120,
+              );
               return (
                 <tr key={c.id} className="border-t border-white/5">
                   <td className="py-3 pr-4">
-                    <div className="h-12 w-12 overflow-hidden rounded-lg border border-white/10 bg-black/40">
+                    <div className="flex items-center gap-3">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={img} alt="" className="h-full w-full object-cover" />
+                      <img src={thumb} alt="" className="h-10 w-10 rounded-lg object-cover" />
+                      <div>
+                        <p className="font-medium">{c.name}</p>
+                        <p className="text-xs text-muted-foreground">{c.slug}</p>
+                      </div>
                     </div>
                   </td>
                   <td className="py-3 pr-4">
-                    <div className="font-medium text-white">{c.name}</div>
-                    {c.description ? (
-                      <p className="mt-0.5 max-w-[220px] truncate text-xs text-white/40">
-                        {c.description}
-                      </p>
-                    ) : null}
+                    <Badge variant={c.isActive === false ? 'outline' : 'default'}>
+                      {c.isActive === false ? 'Archived' : 'Active'}
+                    </Badge>
                   </td>
-                  <td className="py-3 pr-4 text-white/70">{c.slug}</td>
-                  <td className="py-3 pr-4">
-                    {c.isActive !== false ? (
-                      <Badge className="bg-emerald-500/15 text-emerald-200">Active</Badge>
-                    ) : (
-                      <Badge variant="secondary">Inactive</Badge>
-                    )}
-                  </td>
+                  <td className="py-3 pr-4">{c.isFeatured ? 'Yes' : '—'}</td>
+                  <td className="py-3 pr-4">{c.sortOrder ?? 0}</td>
                   <td className="py-3 pr-4 text-white/70">{c._count?.products ?? '—'}</td>
-                  <td className="py-3 pr-0">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        className="gap-1.5"
-                        onClick={() => openEdit(c)}
-                      >
+                  <td className="py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" variant="secondary" className="gap-1.5" onClick={() => void openEdit(c)}>
                         <Pencil className="h-3.5 w-3.5" />
                         Edit
                       </Button>

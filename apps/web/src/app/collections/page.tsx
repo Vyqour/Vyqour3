@@ -54,7 +54,11 @@ export default async function CollectionsPage() {
       <div className="mt-10 grid gap-4 sm:grid-cols-2">
         {cards.map((c) => {
           const src = resolveCategoryImage(
-            { name: c.name, slug: c.slug, imageUrl: c.imageUrl },
+            {
+              name: c.name,
+              slug: c.slug,
+              imageUrl: c.featuredImageUrl || c.bannerUrl || c.imageUrl,
+            },
             1100,
           );
           return (

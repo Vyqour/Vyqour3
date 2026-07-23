@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 const links = [
   { href: '/admin', label: 'Dashboard' },
   { href: '/admin/products', label: 'Products' },
+  { href: '/admin/homepage', label: 'Homepage' },
   { href: '/admin/orders', label: 'Orders' },
   { href: '/admin/qikink', label: 'Qikink' },
   { href: '/admin/users', label: 'Users' },
@@ -28,9 +29,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (!hydrated) return;
-    if (!user) router.replace('/login');
-    else if (!['ADMIN', 'SUPER_ADMIN', 'SUPPORT'].includes(user.role)) router.replace('/account');
-  }, [user, hydrated, router]);
+    if (!user) {
+      const next = encodeURIComponent(pathname || '/admin');
+      router.replace(`/login?next=${next}`);
+      return;
+    }
+    if (!['ADMIN', 'SUPER_ADMIN', 'SUPPORT'].includes(user.role)) {
+      router.replace('/account');
+    }
+  }, [user, hydrated, router, pathname]);
 
   if (!hydrated || !user || !['ADMIN', 'SUPER_ADMIN', 'SUPPORT'].includes(user.role)) {
     return (
@@ -53,18 +60,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
       <div className="grid gap-8 lg:grid-cols-[200px_1fr]">
         <nav className="flex gap-2 overflow-x-auto lg:flex-col">
-          {links.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className={cn(
-                'rounded-full px-4 py-2 text-sm whitespace-nowrap',
-                pathname === l.href ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-white/5 hover:text-white',
-              )}
-            >
-              {l.label}
-            </Link>
-          ))}
+          {links.map((l) => {
+            const active =
+              l.href === '/admin' ? pathname === '/admin' : pathname === l.href || pathname.startsWith(`${l.href}/`);
+            return (
+              <Link
+                key={l.href}
+                href={l.href}
+                className={cn(
+                  'rounded-full px-4 py-2 text-sm whitespace-nowrap',
+                  active
+                    ? 'bg-primary text-white'
+                    : 'text-muted-foreground hover:bg-white/5 hover:text-white',
+                )}
+              >
+                {l.label}
+              </Link>
+            );
+          })}
         </nav>
         <div>{children}</div>
       </div>

@@ -234,6 +234,8 @@ export class ProductsService {
       include: productInclude,
     });
     await this.redis.delByPattern('products:*');
+    await this.redis.delByPattern('categories:*');
+    await this.redis.delByPattern('collections:*');
     return product;
   }
 
@@ -241,40 +243,89 @@ export class ProductsService {
     const existing = await this.prisma.product.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Product not found');
 
-    const data: Prisma.ProductUpdateInput = {
-      name: dto.name,
-      description: dto.description,
-      shortDescription: dto.shortDescription,
-      basePrice: dto.basePrice,
-      compareAtPrice: dto.compareAtPrice,
-      status: dto.status,
-      isFeatured: dto.isFeatured,
-      isNewArrival: dto.isNewArrival,
-      isBestSeller: dto.isBestSeller,
-      isTrending: dto.isTrending,
-      tags: dto.tags,
-      materials: dto.materials,
-      careInstructions: dto.careInstructions,
-      seoTitle: dto.seoTitle,
-      seoDescription: dto.seoDescription,
-    };
-    if (dto.categoryId) data.category = { connect: { id: dto.categoryId } };
-    if (dto.collectionId !== undefined) {
-      if (!dto.collectionId) data.collection = { disconnect: true };
-      else data.collection = { connect: { id: dto.collectionId } };
-    }
-    if (dto.name && !dto.slug) data.slug = slugify(dto.name);
-    if (dto.slug) data.slug = dto.slug;
-    if (dto.status === ProductStatus.ACTIVE && !existing.publishedAt) {
-      data.publishedAt = new Date();
-    }
+    const product = await this.prisma.$transaction(async (tx) => {
+      const data: Prisma.ProductUpdateInput = {
+        name: dto.name,
+        description: dto.description,
+        shortDescription: dto.shortDescription,
+        basePrice: dto.basePrice,
+        compareAtPrice: dto.compareAtPrice,
+        status: dto.status,
+        isFeatured: dto.isFeatured,
+        isNewArrival: dto.isNewArrival,
+        isBestSeller: dto.isBestSeller,
+        isTrending: dto.isTrending,
+        tags: dto.tags,
+        materials: dto.materials,
+        careInstructions: dto.careInstructions,
+        seoTitle: dto.seoTitle,
+        seoDescription: dto.seoDescription,
+      };
+      if (dto.categoryId) data.category = { connect: { id: dto.categoryId } };
+      if (dto.collectionId !== undefined) {
+        if (!dto.collectionId) data.collection = { disconnect: true };
+        else data.collection = { connect: { id: dto.collectionId } };
+      }
+      if (dto.name && !dto.slug) data.slug = slugify(dto.name);
+      if (dto.slug) data.slug = dto.slug;
+      if (dto.status === ProductStatus.ACTIVE && !existing.publishedAt) {
+        data.publishedAt = new Date();
+      }
 
-    const product = await this.prisma.product.update({
-      where: { id },
-      data,
-      include: productInclude,
+      await tx.product.update({ where: { id }, data });
+
+      // Replace images when provided (admin product editor sends full set)
+      if (dto.images !== undefined) {
+        await tx.productImage.deleteMany({ where: { productId: id } });
+        if (dto.images.length) {
+          await tx.productImage.createMany({
+            data: dto.images.map((img, i) => ({
+              productId: id,
+              url: img.url,
+              publicId: img.publicId,
+              alt: img.alt || dto.name || existing.name,
+              isPrimary: img.isPrimary ?? i === 0,
+              sortOrder: img.sortOrder ?? i,
+            })),
+          });
+        }
+      }
+
+      // Replace variants when provided
+      if (dto.variants !== undefined) {
+        await tx.productVariant.deleteMany({ where: { productId: id } });
+        if (dto.variants.length) {
+          await tx.productVariant.createMany({
+            data: dto.variants.map((v) => ({
+              productId: id,
+              sku: v.sku,
+              size: v.size,
+              color: v.color,
+              colorHex: v.colorHex,
+              price: v.price,
+              stock: v.stock ?? 0,
+              imageUrl: v.imageUrl,
+              isActive: true,
+            })),
+          });
+          const qty = dto.variants.reduce((s, v) => s + (v.stock || 0), 0);
+          await tx.inventory.upsert({
+            where: { productId: id },
+            create: { productId: id, quantity: qty },
+            update: { quantity: qty },
+          });
+        }
+      }
+
+      return tx.product.findUniqueOrThrow({
+        where: { id },
+        include: productInclude,
+      });
     });
+
     await this.redis.delByPattern('products:*');
+    await this.redis.delByPattern('categories:*');
+    await this.redis.delByPattern('collections:*');
     return product;
   }
 
@@ -328,6 +379,7 @@ export class ProductsService {
       this.prisma.product.findMany({
         ...base,
         where: { ...base.where, isFeatured: true },
+        orderBy: { updatedAt: 'desc' },
       }),
       this.prisma.product.findMany({
         ...base,
@@ -337,6 +389,7 @@ export class ProductsService {
       this.prisma.product.findMany({
         ...base,
         where: { ...base.where, isTrending: true },
+        orderBy: { updatedAt: 'desc' },
       }),
       this.prisma.product.findMany({
         ...base,

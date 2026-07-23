@@ -33,13 +33,48 @@ export default function AdminDashboardPage() {
   const [err, setErr] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
     apiClient
       .get<Dash>('/admin/dashboard', { auth: true })
-      .then(setData)
-      .catch((e) => setErr(e instanceof Error ? e.message : 'Failed to load'));
+      .then((res) => {
+        if (!cancelled) setData(res);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        const msg = e instanceof Error ? e.message : 'Failed to load';
+        setErr(
+          msg.includes('Insufficient') || msg.includes('403')
+            ? 'You do not have permission to view the dashboard. Ask a SUPER_ADMIN to grant ADMIN access.'
+            : msg.includes('Authentication') || msg.includes('401')
+              ? 'Session expired — sign in again.'
+              : msg || 'Failed to load dashboard',
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  if (err) return <p className="text-red-400">{err}</p>;
+  if (err)
+    return (
+      <div className="glass space-y-3 rounded-2xl p-6">
+        <p className="text-red-400">{err}</p>
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={() => {
+            setErr('');
+            setData(null);
+            apiClient
+              .get<Dash>('/admin/dashboard', { auth: true })
+              .then(setData)
+              .catch((e) => setErr(e instanceof Error ? e.message : 'Failed to load'));
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    );
   if (!data) {
     return (
       <div className="flex justify-center py-16">

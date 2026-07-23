@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class CreateCollectionDto {
   @ApiProperty()
@@ -24,6 +32,16 @@ export class CreateCollectionDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsString()
+  bannerUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  featuredImageUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsInt()
   @Min(0)
   sortOrder?: number;
@@ -42,6 +60,25 @@ export class CreateCollectionDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  isFeatured?: boolean;
+
+  /** Product IDs to assign to this collection (replaces membership when set on update) */
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  productIds?: string[];
 }
 
 export class UpdateCollectionDto extends PartialType(CreateCollectionDto) {}
+
+export class SetCollectionProductsDto {
+  @ApiProperty({ type: [String] })
+  @IsArray()
+  @IsString({ each: true })
+  productIds!: string[];
+}

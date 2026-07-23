@@ -68,6 +68,7 @@ export class CategoriesService {
       },
     });
     await this.redis.delByPattern('categories:*');
+    await this.redis.delByPattern('products:*');
     return category;
   }
 
@@ -105,6 +106,7 @@ export class CategoriesService {
 
     const category = await this.prisma.category.update({ where: { id }, data });
     await this.redis.delByPattern('categories:*');
+    await this.redis.delByPattern('products:*');
     return category;
   }
 
@@ -112,6 +114,7 @@ export class CategoriesService {
     await this.ensureExists(id);
     await this.prisma.category.update({ where: { id }, data: { isActive: false } });
     await this.redis.delByPattern('categories:*');
+    await this.redis.delByPattern('products:*');
     return { message: 'Category archived' };
   }
 
