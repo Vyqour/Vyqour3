@@ -19,7 +19,7 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             className="mb-4 text-xs font-semibold uppercase tracking-[0.3em] text-primary-glow"
           >
-            Premium POD · India
+             Modern Fashion & Lifestyle Brand · India
           </motion.p>
           <motion.h1
             initial={{ opacity: 0, y: 16 }}
@@ -37,8 +37,7 @@ export function Hero() {
             transition={{ delay: 0.12 }}
             className="mt-6 max-w-md text-base leading-relaxed text-muted-foreground"
           >
-            Minimal luxury streetwear engineered for 16–30. Heavyweight fabrics, sharp silhouettes,
-            and drops that mean something.
+            Vyqour is a modern lifestyle and fashion brand that creates premium clothing and accessories designed to help people express their identity, confidence, and individuality.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -66,7 +65,7 @@ export function Hero() {
               <p>GSM fabrics</p>
             </div>
             <div>
-              <p className="text-xl font-medium text-white">₹1999+</p>
+              <p className="text-xl font-medium text-white">₹499+</p>
               <p>Free shipping</p>
             </div>
             <div>
