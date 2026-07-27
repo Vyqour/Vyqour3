@@ -5,9 +5,9 @@ export default function AdminSettingsPage() {
       <p>Brand: VYQOUR</p>
       <p>Tagline: Wear Your Identity.</p>
       <p>Currency: INR (₹)</p>
-      <p>Free shipping minimum: ₹1,999</p>
-      <p>Flat shipping: ₹99</p>
-      <p>Support: support@vyqour.com</p>
+      <p>Free shipping minimum: ₹499</p>
+      <p>Flat shipping: ₹69</p>
+      <p>Support: vyqourofficial@gmail.com</p>
       <p className="pt-4">Configure environment variables on the API for SMTP, Cloudinary, Razorpay, Google OAuth, and Sentry.</p>
     </div>
   );
