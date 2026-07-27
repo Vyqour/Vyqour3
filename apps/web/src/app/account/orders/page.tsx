@@ -10,25 +10,49 @@ import { formatInr } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+
+const CANCELLABLE_STATUSES = ['PENDING', 'CONFIRMED'];
 
 export default function OrdersPage() {
   const router = useRouter();
   const { user, hydrated } = useAuthStore();
   const [data, setData] = useState<Paginated<Order> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (hydrated && !user) router.push('/login');
   }, [hydrated, user, router]);
 
-  useEffect(() => {
-    if (!user) return;
+  const loadOrders = () => {
     apiClient
       .get<Paginated<Order>>('/orders/mine', { auth: true })
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    loadOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  const cancelOrder = async (orderId: string) => {
+    if (!window.confirm('Are you sure you want to cancel this order?')) return;
+    setCancellingId(orderId);
+    try {
+      await apiClient.post(`/orders/${orderId}/cancel`, { reason: 'Cancelled by customer' }, { auth: true });
+      toast.success('Order cancelled');
+      loadOrders();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Unable to cancel order');
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   if (!hydrated || loading) {
     return (
@@ -71,16 +95,25 @@ export default function OrdersPage() {
               <p className="mt-3 text-sm text-muted-foreground">
                 {o.items.map((i) => `${i.productName} ×${i.quantity}`).join(' · ')}
               </p>
-              <Link
-                href={`/track-order?order=${o.orderNumber}`}
-                className="mt-3 inline-block text-sm text-primary-glow"
-              >
-                Track order →
-              </Link>
+              <div className="mt-3 flex flex-wrap items-center gap-4">
+                <Link href={`/track-order?order=${o.orderNumber}`} className="text-sm text-primary-glow">
+                  Track order →
+                </Link>
+                {CANCELLABLE_STATUSES.includes(o.status) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    loading={cancellingId === o.id}
+                    onClick={() => cancelOrder(o.id)}
+                  >
+                    Cancel order
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
         </div>
       )}
     </div>
   );
-}
+      }
