@@ -20,7 +20,7 @@ export default function ContactPage() {
             Order help, collaborations, or press — we read every message.
           </p>
           <div className="mt-8 space-y-3 text-sm text-muted-foreground">
-            <p>Email: support@vyqour.com</p>
+            <p>Email: vyqourofficial@gmail.com</p>
             <p>Hours: Mon–Sat, 10:00–18:00 IST</p>
             <p>Based in India</p>
           </div>
@@ -60,4 +60,4 @@ export default function ContactPage() {
       </div>
     </div>
   );
-}
+              }
