@@ -18,7 +18,7 @@ export default function Page() {
         <h2 className="text-white text-lg font-medium">Sharing</h2>
         <p>We share data with payment processors, logistics partners, and infrastructure providers only as needed to fulfill orders. We do not sell personal data.</p>
         <h2 className="text-white text-lg font-medium">Your rights</h2>
-        <p>You may request access, correction, or deletion of your account data by contacting support@vyqour.com.</p>
+        <p>You may request access, correction, or deletion of your account data by contacting vyqourofficial@gmail.com.</p>
 
       </div>
     </div>
