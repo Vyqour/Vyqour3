@@ -41,7 +41,7 @@ export function Footer() {
             </p>
             <div className="mt-6 flex flex-col gap-2 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-2">
-                <Mail className="h-4 w-4 text-primary-glow" /> support@vyqour.com
+                <Mail className="h-4 w-4 text-primary-glow" /> vyqourofficial@gmail.com
               </span>
               <span className="inline-flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-primary-glow" /> India
@@ -115,4 +115,4 @@ export function Footer() {
       </div>
     </footer>
   );
-}
+          }
