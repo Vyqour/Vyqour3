@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
   title: 'About',
-  description: 'VYQOUR is premium print-on-demand fashion for India. Wear Your Identity.',
+  description:
+    'VYQOUR is an India-based custom fashion label creating original, made-to-order designs. Wear Your Identity.',
 };
 
 export default function AboutPage() {
@@ -17,18 +18,36 @@ export default function AboutPage() {
         </h1>
         <div className="mt-8 space-y-5 text-base leading-relaxed text-muted-foreground">
           <p>
-            VYQOUR is a premium print-on-demand fashion house built for India&apos;s 16–30 generation —
-            people who treat clothing like a signature, not a costume.
+            VYQOUR is an India-based fashion label built by three founders who believe clothing
+            should say something true about the person wearing it. We are not a mass-produced
+            catalogue brand — every design in our collection is created in-house, specifically for
+            VYQOUR, and made to order once you place it.
           </p>
           <p>
-            We obsess over GSM, drape, and finish. Our capsules stay tight on purpose: less noise, more
-            meaning. From heavyweight hoodies to quiet accessories, every piece is designed to feel
-            intentional the moment you put it on.
+            We started VYQOUR because we were tired of picking between &quot;cheap and forgettable&quot;
+            and &quot;expensive and impersonal.&quot; We wanted pieces with real intent behind them —
+            considered graphics, fabrics that hold their shape, and fits that work for how India&apos;s
+            16–30 generation actually dresses.
           </p>
           <p>
-            Designed with a modern luxury lens — Apple clarity, Nike energy, Nothing minimalism — and
-            shipped nationwide with COD and easy support.
+            Every VYQOUR piece begins as an original design brief from our team. We work with a
+            trusted manufacturing and printing partner to bring each design to life on quality
+            fabric, then ship it directly to you, made specifically for your order rather than
+            pulled off a shelf.
           </p>
+          <p>
+            We are a small, founder-run team — not a registered company yet, but a real business
+            run by three people who personally read every order, every message, and every piece of
+            feedback that comes in. If something goes wrong, you are talking to the people who
+            actually make the decisions, not a support ticket queue.
+          </p>
+          <h2 className="text-lg font-medium text-white">What we stand for</h2>
+          <ul className="list-disc space-y-2 pl-5">
+            <li>Original designs — not templates, not reprints of someone else&apos;s work.</li>
+            <li>Honest quality — GSM, stitching, and print durability we would wear ourselves.</li>
+            <li>Straightforward policies — clear shipping, clear returns, no fine-print surprises.</li>
+            <li>Direct support — real replies from the people running VYQOUR, not a bot.</li>
+          </ul>
         </div>
         <div className="mt-10 flex flex-wrap gap-3">
           <Button asChild>
@@ -41,4 +60,4 @@ export default function AboutPage() {
       </div>
     </div>
   );
-}
+          }
