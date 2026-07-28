@@ -204,7 +204,7 @@ export function ProductDetail({ product }: { product: Product }) {
 
           <div className="mt-8 space-y-3 rounded-2xl border border-white/10 bg-white/[0.02] p-5 text-sm text-muted-foreground">
             <p className="flex items-center gap-2 text-white">
-              <Truck className="h-4 w-4 text-primary-glow" /> Free shipping over ₹1,999 · COD available
+              <Truck className="h-4 w-4 text-primary-glow" /> Free shipping over ₹499 · COD available
             </p>
             <p>Dispatch in 2–4 business days. Easy returns on eligible items.</p>
             {product.materials && <p>Materials: {product.materials}</p>}
