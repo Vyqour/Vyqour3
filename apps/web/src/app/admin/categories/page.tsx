@@ -9,6 +9,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { ImageUploadField } from '@/components/admin/image-upload-field';
 import { Badge } from '@/components/ui/badge';
 
 type CategoryRow = {
@@ -295,28 +296,32 @@ export default function AdminCategoriesPage() {
                 placeholder="Short blurb for SEO / admin"
               />
             </label>
-            <label className="block space-y-1.5 md:col-span-2">
-              <span className="text-xs font-medium uppercase tracking-wide text-white/45">
-                Image URL
-              </span>
-              <Input
+            <div className="md:col-span-2">
+              <ImageUploadField
+                label="Category image"
+                folder="categories"
                 value={editing.imageUrl}
-                onChange={(e) => setEditing((d) => (d ? { ...d, imageUrl: e.target.value } : d))}
-                placeholder="https://… (optional — storefront uses mapped photos if empty)"
+                onChange={(url) => setEditing((d) => (d ? { ...d, imageUrl: url } : d))}
+                hint="Drop an image, click Upload, or paste a URL. Optional — storefront uses mapped photos if empty."
               />
-              <div className="mt-2 h-24 w-24 overflow-hidden rounded-xl border border-white/10 bg-black/40">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={resolveCategoryImage({
-                    name: editing.name || 'Category',
-                    slug: editing.slug,
-                    imageUrl: editing.imageUrl || null,
-                  })}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-              </div>
-            </label>
+              {!editing.imageUrl && (
+                <div className="mt-2 flex items-center gap-2 text-[11px] text-white/40">
+                  <span>Fallback preview:</span>
+                  <div className="h-10 w-10 overflow-hidden rounded-lg border border-white/10 bg-black/40">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={resolveCategoryImage({
+                        name: editing.name || 'Category',
+                        slug: editing.slug,
+                        imageUrl: null,
+                      })}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
             <label className="block space-y-1.5">
               <span className="text-xs font-medium uppercase tracking-wide text-white/45">
                 Parent
@@ -455,4 +460,5 @@ export default function AdminCategoriesPage() {
       </div>
     </div>
   );
-}
+  }
+                  
