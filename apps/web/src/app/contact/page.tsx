@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { apiClient } from '@/lib/api';
 
 export default function ContactPage() {
   const [loading, setLoading] = useState(false);
@@ -27,14 +28,18 @@ export default function ContactPage() {
         </div>
         <form
           className="glass space-y-4 rounded-3xl p-6 md:p-8"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             setLoading(true);
-            setTimeout(() => {
-              setLoading(false);
+            try {
+              await apiClient.post('/contact', form);
               toast.success('Message sent — we will reply soon.');
               setForm({ name: '', email: '', subject: '', message: '' });
-            }, 600);
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : 'Could not send message');
+            } finally {
+              setLoading(false);
+            }
           }}
         >
           <div>
@@ -60,4 +65,4 @@ export default function ContactPage() {
       </div>
     </div>
   );
-              }
+          }
