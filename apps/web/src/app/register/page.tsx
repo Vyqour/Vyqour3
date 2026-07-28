@@ -12,11 +12,16 @@ export default function RegisterPage() {
   const router = useRouter();
   const register = useAuthStore((s) => s.register);
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '', phone: '' });
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!agreedToTerms) {
+      toast.error('Please agree to the Terms of Service and Privacy Policy');
+      return;
+    }
     setLoading(true);
     try {
       await register({
@@ -73,7 +78,26 @@ export default function RegisterPage() {
               Min 8 chars with upper, lower, and a number
             </p>
           </div>
-          <Button type="submit" className="w-full" loading={loading}>
+          <label className="flex items-start gap-2.5 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              required
+              checked={agreedToTerms}
+              onChange={(e) => setAgreedToTerms(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/20 bg-white/5 accent-primary"
+            />
+            <span>
+              I agree to the{' '}
+              <Link href="/terms" className="text-white underline hover:text-primary-glow">
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link href="/privacy" className="text-white underline hover:text-primary-glow">
+                Privacy Policy
+              </Link>
+            </span>
+          </label>
+          <Button type="submit" className="w-full" loading={loading} disabled={!agreedToTerms}>
             Create account
           </Button>
         </form>
