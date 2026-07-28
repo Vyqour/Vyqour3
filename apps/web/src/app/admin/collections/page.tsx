@@ -9,6 +9,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { ImageUploadField } from '@/components/admin/image-upload-field';
 import { Badge } from '@/components/ui/badge';
 
 type CollectionRow = {
@@ -274,28 +275,27 @@ export default function AdminCollectionsPage() {
                 rows={3}
               />
             </label>
-            <label className="block space-y-1.5">
-              <span className="text-xs uppercase text-white/45">Card image URL</span>
-              <Input
-                value={draft.imageUrl}
-                onChange={(e) => setDraft({ ...draft, imageUrl: e.target.value })}
-                placeholder="https://…"
-              />
-            </label>
-            <label className="block space-y-1.5">
-              <span className="text-xs uppercase text-white/45">Featured image URL</span>
-              <Input
-                value={draft.featuredImageUrl}
-                onChange={(e) => setDraft({ ...draft, featuredImageUrl: e.target.value })}
-              />
-            </label>
-            <label className="block space-y-1.5 md:col-span-2">
-              <span className="text-xs uppercase text-white/45">Banner URL</span>
-              <Input
+            <ImageUploadField
+              label="Card image"
+              folder="collections"
+              value={draft.imageUrl}
+              onChange={(url) => setDraft({ ...draft, imageUrl: url })}
+            />
+            <ImageUploadField
+              label="Featured image"
+              folder="collections"
+              value={draft.featuredImageUrl}
+              onChange={(url) => setDraft({ ...draft, featuredImageUrl: url })}
+            />
+            <div className="md:col-span-2">
+              <ImageUploadField
+                label="Banner image"
+                folder="collections"
                 value={draft.bannerUrl}
-                onChange={(e) => setDraft({ ...draft, bannerUrl: e.target.value })}
+                onChange={(url) => setDraft({ ...draft, bannerUrl: url })}
+                previewClassName="aspect-[21/9]"
               />
-            </label>
+            </div>
             <label className="block space-y-1.5">
               <span className="text-xs uppercase text-white/45">Display order</span>
               <Input
@@ -438,4 +438,5 @@ export default function AdminCollectionsPage() {
       </div>
     </div>
   );
-}
+    }
+      
