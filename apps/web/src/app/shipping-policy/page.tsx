@@ -43,7 +43,7 @@ export default function Page() {
 
         <h2 className="text-white text-lg font-medium">4. Shipping charges</h2>
         <p>
-          We charge a flat shipping fee of ₹99 per order. Orders of ₹1,999 and above ship free
+          We charge a flat shipping fee of ₹69 per order. Orders of ₹499 and above ship free
           anywhere in India. Any applicable shipping fee is shown clearly at checkout before you pay.
         </p>
 
