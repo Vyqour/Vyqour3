@@ -25,13 +25,19 @@ export class MailService {
     }
   }
 
-  private async send(to: string, subject: string, html: string) {
+  private async send(to: string, subject: string, html: string, replyTo?: string) {
     if (!this.transporter) {
       this.logger.log(`[email:dev] to=${to} subject=${subject}`);
       return;
     }
     try {
-      await this.transporter.sendMail({ from: this.from, to, subject, html });
+      await this.transporter.sendMail({
+        from: this.from,
+        to,
+        subject,
+        html,
+        ...(replyTo ? { replyTo } : {}),
+      });
     } catch (err) {
       this.logger.error(
         `Failed to send email to=${to} subject=${subject}: ${
@@ -107,4 +113,24 @@ export class MailService {
       </div>`,
     );
   }
-}
+
+  async sendContactMessage(
+    to: string,
+    data: { name: string; email: string; subject: string; message: string },
+  ) {
+    await this.send(
+      to,
+      `[Contact] ${data.subject}`,
+      `<div style="font-family:Inter,Arial,sans-serif;background:#0B0B0B;color:#fff;padding:32px">
+        <h1 style="color:#a78bfa">New contact message</h1>
+        <p><strong>From:</strong> ${data.name} (${data.email})</p>
+        <p><strong>Subject:</strong> ${data.subject}</p>
+        <div style="margin-top:16px;padding:16px;background:#1a1a1a;border-radius:8px">
+          ${data.message}
+        </div>
+        <p style="margin-top:24px;color:#888;font-size:12px">Reply directly to this email to respond to ${data.email}.</p>
+      </div>`,
+      data.email,
+    );
+  }
+      }
