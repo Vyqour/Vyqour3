@@ -22,6 +22,7 @@ import { CouponsModule } from './modules/coupons/coupons.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { BlogModule } from './modules/blog/blog.module';
 import { NewsletterModule } from './modules/newsletter/newsletter.module';
+import { ContactModule } from './modules/contact/contact.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { MediaModule } from './modules/media/media.module';
 import { PaymentsModule } from './modules/payments/payments.module';
@@ -63,6 +64,7 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
     AdminModule,
     BlogModule,
     NewsletterModule,
+    ContactModule,
     NotificationsModule,
     MediaModule,
     PaymentsModule,
