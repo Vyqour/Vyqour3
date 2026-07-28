@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { ImageUploadField } from '@/components/admin/image-upload-field';
 
 type Category = { id: string; name: string; slug: string };
 
@@ -749,14 +750,14 @@ export default function AdminProductsPage() {
                     />
                   </Field>
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Field label="Primary image URL">
-                      <Input
-                        value={d.imageUrl}
-                        onChange={(e) => updateDraft(d.localKey, { imageUrl: e.target.value })}
-                        placeholder="https://..."
-                      />
-                    </Field>
+                  <div className="space-y-4">
+                    <ImageUploadField
+                      label="Primary image"
+                      folder="products"
+                      value={d.imageUrl}
+                      onChange={(url) => updateDraft(d.localKey, { imageUrl: url })}
+                      previewClassName="aspect-[4/5]"
+                    />
                     <Field label="Image alt text">
                       <Input
                         value={d.imageAlt}
@@ -905,4 +906,5 @@ function Field({
       {children}
     </label>
   );
-}
+         }
+    
