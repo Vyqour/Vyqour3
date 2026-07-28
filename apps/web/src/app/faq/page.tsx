@@ -25,7 +25,7 @@ const faqs = [
   },
   {
     q: 'When is shipping free?',
-    a: 'Orders of ₹1,999 and above ship free anywhere in India. Below that, a flat ₹99 shipping fee applies, shown clearly at checkout.',
+    a: 'Orders of ₹499 and above ship free anywhere in India. Below that, a flat ₹69 shipping fee applies, shown clearly at checkout.',
   },
   {
     q: 'How do I track my order?',
