@@ -199,7 +199,8 @@ export class AuthService {
           expiresAt: new Date(Date.now() + 60 * 60 * 1000),
         },
       });
-      await this.mail.sendPasswordResetEmail(user.email, token);
+      // Fire-and-forget: don't make the user wait on SMTP for this response
+      this.mail.sendPasswordResetEmail(user.email, token).catch(() => undefined);
     }
     return { message: 'If that email exists, a reset link has been sent' };
   }
