@@ -181,6 +181,55 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   seoDescription?: string;
+
+  @ApiPropertyOptional({
+    description: 'Qikink catalog SKU (My Products or SKU Description) used for fulfilment',
+  })
+  @IsOptional()
+  @IsString()
+  qikinkSku?: string;
+
+  @ApiPropertyOptional({
+    description: 'Qikink Print Type ID (see Qikink SKU catalog). Defaults to 1.',
+  })
+  @IsOptional()
+  @IsNumber()
+  qikinkPrintTypeId?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Array of print placements (front/back/sleeve etc). Each item needs a print-ready designUrl (never shown to customers). Required when qikinkSearchFromMyProducts = 0.',
+    type: 'array',
+    example: [
+      {
+        placement: 'fr',
+        designCode: 'SAMURAI-FRONT',
+        designUrl: 'https://res.cloudinary.com/.../front.png',
+        mockupUrl: 'https://res.cloudinary.com/.../front-mockup.png',
+      },
+      {
+        placement: 'bk',
+        designCode: 'SAMURAI-BACK',
+        designUrl: 'https://res.cloudinary.com/.../back.png',
+      },
+    ],
+  })
+  @IsOptional()
+  @IsArray()
+  qikinkDesigns?: Array<{
+    placement: string;
+    designCode?: string;
+    designUrl: string;
+    mockupUrl?: string;
+  }>;
+
+  @ApiPropertyOptional({
+    description:
+      '1 = use existing Qikink catalog product/SKU (no custom design upload needed). 0 = custom design — requires qikinkDesignUrl.',
+  })
+  @IsOptional()
+  @IsNumber()
+  qikinkSearchFromMyProducts?: number;
 }
 
 export class UpdateProductDto extends PartialType(CreateProductDto) {}
@@ -245,4 +294,4 @@ export class ProductQueryDto extends PaginationDto {
   @IsOptional()
   @IsString()
   status?: string;
-}
+  }
