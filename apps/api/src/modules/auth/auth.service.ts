@@ -112,12 +112,8 @@ export class AuthService {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
     });
-    // Never fail registration if outbound email is misconfigured
-    try {
-      await this.mail.sendVerificationEmail(user.email, verifyToken);
-    } catch {
-      /* logged inside MailService / ignored so auth still succeeds */
-    }
+   // Fire-and-forget: never let a slow/unreachable SMTP server delay or fail registration
+    this.mail.sendVerificationEmail(user.email, verifyToken).catch(() => undefined);
 
     const accessToken = this.signAccess(user);
     const refreshToken = await this.issueRefreshToken(user.id);
