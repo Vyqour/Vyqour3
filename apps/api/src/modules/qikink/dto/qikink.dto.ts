@@ -1,6 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsObject, IsOptional, IsString } from 'class-validator';
-
+import { IsArray, IsObject, IsOptional, IsString } from 'class-validator';
 export class QikinkWebhookDto {
   @ApiPropertyOptional()
   @IsOptional()
@@ -56,21 +55,14 @@ export class MapQikinkSkuDto {
   qikinkPrintTypeId?: number;
 
   @IsOptional()
-  @IsString()
-  qikinkDesignCode?: string;
-
-  @IsOptional()
-  @IsString()
-  qikinkDesignUrl?: string;
-
-  @IsOptional()
-  @IsString()
-  qikinkMockupUrl?: string;
-
-  @IsOptional()
-  @IsString()
-  qikinkPlacementSku?: string;
+  @IsArray()
+  qikinkDesigns?: Array<{
+    placement: string;
+    designCode?: string;
+    designUrl: string;
+    mockupUrl?: string;
+  }>;
 
   @IsOptional()
   qikinkSearchFromMyProducts?: number;
-}
+  }
