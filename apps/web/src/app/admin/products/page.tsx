@@ -80,6 +80,9 @@ type Product = {
   seoTitle?: string | null;
   seoDescription?: string | null;
   qikinkSku?: string | null;
+  qikinkPrintTypeId?: number | null;
+  qikinkDesigns?: QikinkDesignEntry[] | null;
+  qikinkSearchFromMyProducts?: number | null;
   images?: ProductImage[];
   variants?: ProductVariant[];
   category?: { id: string; name: string; slug: string };
@@ -109,6 +112,12 @@ type DraftForm = {
   seoDescription: string;
   imageUrl: string;
   imageAlt: string;
+  qikinkSku: string;
+  qikinkPrintTypeId: string;
+  qikinkSearchFromMyProducts: '0' | '1';
+  qikinkDesigns: QikinkDesignEntry[];
+  /** variants as simple lines: SKU | size | color | stock | price */
+  variantsText: string;
   /** variants as simple lines: SKU | size | color | stock | price */
   variantsText: string;
   expanded: boolean;
@@ -175,9 +184,13 @@ function makeTemplate(categoryId = '', collectionId = ''): DraftForm {
     seoDescription: 'Shop premium quality apparel at VYQOUR.',
     imageUrl: 'https://placehold.co/800x1000/111111/FFFFFF/png?text=VYQOUR',
     imageAlt: name,
+    qikinkSku: '',
+    qikinkPrintTypeId: '1',
+    qikinkSearchFromMyProducts: '1',
+    qikinkDesigns: [],
     variantsText: variants,
   };
-}
+    }
 
 function productToDraft(p: Product): DraftForm {
   const variantsText = (p.variants || [])
@@ -214,9 +227,20 @@ function productToDraft(p: Product): DraftForm {
     seoDescription: p.seoDescription || '',
     imageUrl: primary.url || '',
     imageAlt: primary.alt || p.name || '',
+    qikinkSku: p.qikinkSku || '',
+    qikinkPrintTypeId: p.qikinkPrintTypeId != null ? String(p.qikinkPrintTypeId) : '1',
+    qikinkSearchFromMyProducts: p.qikinkSearchFromMyProducts === 0 ? '0' : '1',
+    qikinkDesigns: Array.isArray(p.qikinkDesigns)
+      ? p.qikinkDesigns.map((d) => ({
+          placement: d.placement || 'fr',
+          designCode: d.designCode || '',
+          designUrl: d.designUrl || '',
+          mockupUrl: d.mockupUrl || '',
+        }))
+      : [],
     variantsText,
   };
-}
+    }
 
 function parseVariants(text: string, fallbackPrice: number): ProductVariant[] {
   return text
@@ -388,6 +412,20 @@ export default function AdminProductsPage() {
       careInstructions: d.careInstructions.trim() || undefined,
       seoTitle: d.seoTitle.trim() || undefined,
       seoDescription: d.seoDescription.trim() || undefined,
+      qikinkSku: d.qikinkSku.trim() || undefined,
+      qikinkPrintTypeId: d.qikinkPrintTypeId ? Number(d.qikinkPrintTypeId) : undefined,
+      qikinkSearchFromMyProducts: Number(d.qikinkSearchFromMyProducts),
+      qikinkDesigns:
+        d.qikinkDesigns.filter((x) => x.designUrl.trim()).length > 0
+          ? d.qikinkDesigns
+              .filter((x) => x.designUrl.trim())
+              .map((x) => ({
+                placement: x.placement,
+                designCode: x.designCode.trim() || undefined,
+                designUrl: x.designUrl.trim(),
+                mockupUrl: x.mockupUrl?.trim() || undefined,
+              }))
+          : undefined,
       images,
       // variants only on create (API update does not replace variants yet)
       ...(d.isNew ? { variants } : {}),
@@ -845,6 +883,186 @@ export default function AdminProductsPage() {
                     </Field>
                   </div>
 
+                  <div className="rounded-xl border border-white/10 p-4">
+                    <h4 className="text-sm font-medium text-white">Qikink fulfillment</h4>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Controls exactly what data is sent to Qikink when this product is ordered.
+                    </p>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <Field label="Qikink SKU" hint="Catalog SKU from Qikink's product/SKU list">
+                        <Input
+                          value={d.qikinkSku}
+                          onChange={(e) => updateDraft(d.localKey, { qikinkSku: e.target.value })}
+                          placeholder="e.g. TS-RN-BLK-M"
+                        />
+                      </Field>
+                      <Field label="Print type ID" hint="From Qikink's SKU catalog — defaults to 1">
+                        <Input
+                          type="number"
+                          value={d.qikinkPrintTypeId}
+                          onChange={(e) =>
+                            updateDraft(d.localKey, { qikinkPrintTypeId: e.target.value })
+                          }
+                        />
+                      </Field>
+                    </div>
+
+                    <div className="mt-4">
+                      <Field
+                        label="Design source"
+                        hint="Catalog = use Qikink's existing product/SKU. Custom = upload your own design artwork below."
+                      >
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateDraft(d.localKey, { qikinkSearchFromMyProducts: '1' })
+                            }
+                            className={`rounded-lg border px-3 py-1.5 text-xs ${
+                              d.qikinkSearchFromMyProducts === '1'
+                                ? 'border-primary bg-primary/10 text-white'
+                                : 'border-white/10 text-muted-foreground'
+                            }`}
+                          >
+                            Catalog SKU
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateDraft(d.localKey, { qikinkSearchFromMyProducts: '0' })
+                            }
+                            className={`rounded-lg border px-3 py-1.5 text-xs ${
+                              d.qikinkSearchFromMyProducts === '0'
+                                ? 'border-primary bg-primary/10 text-white'
+                                : 'border-white/10 text-muted-foreground'
+                            }`}
+                          >
+                            Custom design
+                          </button>
+                        </div>
+                      </Field>
+                    </div>
+
+                    {d.qikinkSearchFromMyProducts === '0' && (
+                      <div className="mt-4 space-y-4">
+                        {d.qikinkDesigns.length === 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            No print placements added yet. Add one for each side you print on
+                            (e.g. Front, Back).
+                          </p>
+                        )}
+
+                        {d.qikinkDesigns.map((entry, idx) => (
+                          <div
+                            key={idx}
+                            className="space-y-4 rounded-lg border border-white/10 p-4"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-medium text-white">
+                                Placement {idx + 1}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updateDraft(d.localKey, {
+                                    qikinkDesigns: d.qikinkDesigns.filter((_, i) => i !== idx),
+                                  })
+                                }
+                                className="text-xs text-red-400 hover:text-red-300"
+                              >
+                                Remove
+                              </button>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <Field label="Print location">
+                                <div className="flex flex-wrap gap-2">
+                                  {QIKINK_PLACEMENTS.map((opt) => (
+                                    <button
+                                      key={opt.value}
+                                      type="button"
+                                      onClick={() => {
+                                        const next = [...d.qikinkDesigns];
+                                        next[idx] = { ...next[idx], placement: opt.value };
+                                        updateDraft(d.localKey, { qikinkDesigns: next });
+                                      }}
+                                      className={`rounded-lg border px-3 py-1.5 text-xs ${
+                                        entry.placement === opt.value
+                                          ? 'border-primary bg-primary/10 text-white'
+                                          : 'border-white/10 text-muted-foreground'
+                                      }`}
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </Field>
+                              <Field
+                                label="Design code"
+                                hint="A short reference code for this design (letters/numbers)"
+                              >
+                                <Input
+                                  value={entry.designCode}
+                                  onChange={(e) => {
+                                    const next = [...d.qikinkDesigns];
+                                    next[idx] = { ...next[idx], designCode: e.target.value };
+                                    updateDraft(d.localKey, { qikinkDesigns: next });
+                                  }}
+                                />
+                              </Field>
+                            </div>
+
+                            <ImageUploadField
+                              folder="qikink-designs"
+                              label={`Print-ready design file — ${
+                                QIKINK_PLACEMENTS.find((p) => p.value === entry.placement)
+                                  ?.label || 'Front'
+                              }`}
+                              hint="Flat artwork only — no mockup, no mannequin, no shirt. This exact file is sent to Qikink for printing. Never shown to customers."
+                              value={entry.designUrl}
+                              onChange={(url) => {
+                                const next = [...d.qikinkDesigns];
+                                next[idx] = { ...next[idx], designUrl: url };
+                                updateDraft(d.localKey, { qikinkDesigns: next });
+                              }}
+                              previewClassName="aspect-square"
+                            />
+
+                            <ImageUploadField
+                              folder="qikink-mockups"
+                              label="Internal reference mockup (optional)"
+                              hint="Optional preview for your own reference. Also never shown to customers — customer photos come from the Product Images section above."
+                              value={entry.mockupUrl || ''}
+                              onChange={(url) => {
+                                const next = [...d.qikinkDesigns];
+                                next[idx] = { ...next[idx], mockupUrl: url };
+                                updateDraft(d.localKey, { qikinkDesigns: next });
+                              }}
+                              previewClassName="aspect-square"
+                            />
+                          </div>
+                        ))}
+
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() =>
+                            updateDraft(d.localKey, {
+                              qikinkDesigns: [
+                                ...d.qikinkDesigns,
+                                { placement: 'fr', designCode: '', designUrl: '', mockupUrl: '' },
+                              ],
+                            })
+                          }
+                        >
+                          <Plus className="mr-1 h-3.5 w-3.5" /> Add print placement
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
                   <Field
                     label={
                       d.isNew
@@ -909,15 +1127,17 @@ export default function AdminProductsPage() {
 function Field({
   label,
   children,
+  hint,
 }: {
   label: string;
   children: React.ReactNode;
+  hint?: string;
 }) {
   return (
     <label className="block space-y-1.5">
       <span className="text-xs font-medium uppercase tracking-wide text-white/45">{label}</span>
       {children}
+      {hint && <span className="block text-[11px] text-muted-foreground">{hint}</span>}
     </label>
   );
-         }
-    
+}
