@@ -80,6 +80,9 @@ type Product = {
   seoTitle?: string | null;
   seoDescription?: string | null;
   qikinkSku?: string | null;
+  qikinkPrintTypeId?: number;
+  qikinkSearchFromMyProducts?: number;
+  qikinkDesigns?: QikinkDesignEntry[] | null;
   images?: ProductImage[];
   variants?: ProductVariant[];
   category?: { id: string; name: string; slug: string };
@@ -111,6 +114,13 @@ type DraftForm = {
   imageAlt: string;
   /** variants as simple lines: SKU | size | color | stock | price */
   variantsText: string;
+  /** Qikink blank/base SKU this product maps to (e.g. USs-Wh-M or a catalog code) */
+  qikinkSku: string;
+  /** 1 = use Qikink's own catalog product (no custom print), 0 = custom design print */
+  qikinkSearchFromMyProducts: number;
+  qikinkPrintTypeId: number;
+  /** Print-ready designs sent to Qikink — separate from the customer-facing mockup/photos */
+  qikinkDesigns: QikinkDesignEntry[];
   expanded: boolean;
   saving: boolean;
   isNew: boolean;
@@ -176,6 +186,10 @@ function makeTemplate(categoryId = '', collectionId = ''): DraftForm {
     imageUrl: 'https://placehold.co/800x1000/111111/FFFFFF/png?text=VYQOUR',
     imageAlt: name,
     variantsText: variants,
+    qikinkSku: '',
+    qikinkSearchFromMyProducts: 1,
+    qikinkPrintTypeId: 1,
+    qikinkDesigns: [],
   };
 }
 
@@ -215,6 +229,10 @@ function productToDraft(p: Product): DraftForm {
     imageUrl: primary.url || '',
     imageAlt: primary.alt || p.name || '',
     variantsText,
+    qikinkSku: p.qikinkSku || '',
+    qikinkSearchFromMyProducts: p.qikinkSearchFromMyProducts ?? 1,
+    qikinkPrintTypeId: p.qikinkPrintTypeId ?? 1,
+    qikinkDesigns: Array.isArray(p.qikinkDesigns) ? p.qikinkDesigns : [],
   };
 }
 
@@ -339,6 +357,51 @@ export default function AdminProductsPage() {
     setDrafts((prev) => prev.map((d) => (d.localKey === localKey ? { ...d, ...patch } : d)));
   };
 
+  const addDesignEntry = (localKey: string) => {
+    setDrafts((prev) =>
+      prev.map((d) =>
+        d.localKey === localKey
+          ? {
+              ...d,
+              qikinkDesigns: [
+                ...d.qikinkDesigns,
+                { placement: 'fr', designCode: '', designUrl: '', mockupUrl: '' },
+              ],
+            }
+          : d,
+      ),
+    );
+  };
+
+  const updateDesignEntry = (
+    localKey: string,
+    index: number,
+    patch: Partial<QikinkDesignEntry>,
+  ) => {
+    setDrafts((prev) =>
+      prev.map((d) =>
+        d.localKey === localKey
+          ? {
+              ...d,
+              qikinkDesigns: d.qikinkDesigns.map((entry, i) =>
+                i === index ? { ...entry, ...patch } : entry,
+              ),
+            }
+          : d,
+      ),
+    );
+  };
+
+  const removeDesignEntry = (localKey: string, index: number) => {
+    setDrafts((prev) =>
+      prev.map((d) =>
+        d.localKey === localKey
+          ? { ...d, qikinkDesigns: d.qikinkDesigns.filter((_, i) => i !== index) }
+          : d,
+      ),
+    );
+  };
+
   const addTemplate = () => {
     const tpl = makeTemplate(defaultCategoryId, defaultCollectionId);
     setDrafts((prev) => [tpl, ...prev]);
@@ -353,6 +416,15 @@ export default function AdminProductsPage() {
     if (!d.description.trim()) throw new Error('Description is required');
     if (!d.categoryId) throw new Error('Category is required');
     if (Number.isNaN(basePrice) || basePrice < 0) throw new Error('Valid base price is required');
+
+    if (d.qikinkSearchFromMyProducts === 0) {
+      const validDesigns = d.qikinkDesigns.filter((entry) => entry.designUrl?.trim());
+      if (!validDesigns.length) {
+        throw new Error(
+          'Add at least one print-ready design (front/back) before saving — Qikink needs a design file, not just the customer-facing photo.',
+        );
+      }
+    }
 
     const variants = parseVariants(d.variantsText, basePrice);
     const images = d.imageUrl.trim()
@@ -389,6 +461,13 @@ export default function AdminProductsPage() {
       seoTitle: d.seoTitle.trim() || undefined,
       seoDescription: d.seoDescription.trim() || undefined,
       images,
+      qikinkSku: d.qikinkSku.trim() || undefined,
+      qikinkSearchFromMyProducts: d.qikinkSearchFromMyProducts,
+      qikinkPrintTypeId: d.qikinkPrintTypeId,
+      qikinkDesigns:
+        d.qikinkSearchFromMyProducts === 0
+          ? d.qikinkDesigns.filter((entry) => entry.designUrl?.trim())
+          : [],
       // variants only on create (API update does not replace variants yet)
       ...(d.isNew ? { variants } : {}),
     };
@@ -779,6 +858,135 @@ export default function AdminProductsPage() {
                     </Field>
                   </div>
 
+                  <div className="space-y-4 rounded-lg border border-white/10 p-4">
+                    <div>
+                      <h4 className="text-sm font-semibold text-white">Qikink print setup</h4>
+                      <p className="text-xs text-white/45">
+                        The image above is the customer-facing photo. Qikink needs a separate
+                        print-ready design file for each placement — it is never shown to
+                        customers.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Field label="Qikink SKU (blank/catalog code)">
+                        <Input
+                          value={d.qikinkSku}
+                          onChange={(e) => updateDraft(d.localKey, { qikinkSku: e.target.value })}
+                          placeholder="e.g. USs-Wh-M"
+                        />
+                      </Field>
+                      <Field label="Fulfillment mode">
+                        <select
+                          value={d.qikinkSearchFromMyProducts}
+                          onChange={(e) =>
+                            updateDraft(d.localKey, {
+                              qikinkSearchFromMyProducts: Number(e.target.value),
+                            })
+                          }
+                          className="h-10 w-full rounded-md border border-white/15 bg-black px-3 text-sm text-white"
+                        >
+                          <option value={1}>Qikink catalog product (no custom print)</option>
+                          <option value={0}>Custom design — upload print file(s)</option>
+                        </select>
+                      </Field>
+                    </div>
+
+                    {d.qikinkSearchFromMyProducts === 0 && (
+                      <div className="space-y-4">
+                        {d.qikinkDesigns.length === 0 && (
+                          <p className="rounded-md border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-amber-300">
+                            No print design added yet — orders for this product will fail to
+                            sync to Qikink until you add at least one.
+                          </p>
+                        )}
+                        {d.qikinkDesigns.map((entry, index) => (
+                          <div
+                            key={index}
+                            className="space-y-3 rounded-md border border-white/10 p-3"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-medium uppercase tracking-wide text-white/45">
+                                Placement {index + 1}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => removeDesignEntry(d.localKey, index)}
+                                className="text-white/45 hover:text-white"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <Field label="Placement">
+                                <select
+                                  value={entry.placement}
+                                  onChange={(e) =>
+                                    updateDesignEntry(d.localKey, index, {
+                                      placement: e.target.value,
+                                    })
+                                  }
+                                  className="h-10 w-full rounded-md border border-white/15 bg-black px-3 text-sm text-white"
+                                >
+                                  {QIKINK_PLACEMENTS.map((p) => (
+                                    <option key={p.value} value={p.value}>
+                                      {p.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </Field>
+                              <Field label="Design code (optional)">
+                                <Input
+                                  value={entry.designCode}
+                                  onChange={(e) =>
+                                    updateDesignEntry(d.localKey, index, {
+                                      designCode: e.target.value,
+                                    })
+                                  }
+                                  placeholder="Defaults to product slug"
+                                />
+                              </Field>
+                            </div>
+
+                            <ImageUploadField
+                              label="Print-ready design file (sent to Qikink)"
+                              folder="qikink-designs"
+                              value={entry.designUrl}
+                              onChange={(url) =>
+                                updateDesignEntry(d.localKey, index, { designUrl: url })
+                              }
+                              hint="High-res print file — this is what actually gets printed, not a preview."
+                              previewClassName="aspect-square"
+                            />
+
+                            <ImageUploadField
+                              label="Mockup preview (optional, internal reference only)"
+                              folder="qikink-mockups"
+                              value={entry.mockupUrl || ''}
+                              onChange={(url) =>
+                                updateDesignEntry(d.localKey, index, { mockupUrl: url })
+                              }
+                              hint="Not shown to customers — customer photos come from the image field above."
+                              previewClassName="aspect-square"
+                            />
+                          </div>
+                        ))}
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => addDesignEntry(d.localKey)}
+                          className="gap-2"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add placement
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex flex-wrap gap-4">
                     {(
                       [
@@ -920,4 +1128,5 @@ function Field({
     </label>
   );
          }
+
     
