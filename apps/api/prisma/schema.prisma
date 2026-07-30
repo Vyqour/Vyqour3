@@ -297,13 +297,15 @@ model Product {
   totalSold       Int           @default(0)
   viewCount       Int           @default(0)
   /// Qikink base SKU / catalog code (My Products or SKU Descriptions)
-  qikinkSku       String?
+qikinkSku       String?
   qikinkProductId String?
   qikinkPrintTypeId Int         @default(1)
-  qikinkDesignCode String?
-  qikinkDesignUrl  String?
-  qikinkMockupUrl  String?
-  qikinkPlacementSku String?    @default("fr")
+  /// Array of print placements for this product, sent to Qikink.
+  /// Each entry: { placement: "fr"|"bk"|"ls"|"rs", designCode, designUrl, mockupUrl? }
+  /// designUrl = print-ready artwork sent to Qikink (never shown to customers).
+  /// mockupUrl = optional internal reference preview (also never shown to customers —
+  /// customer-facing photos live in ProductImage instead).
+  qikinkDesigns   Json?
   qikinkSearchFromMyProducts Int @default(1)
   qikinkSyncedAt  DateTime?
   createdAt       DateTime      @default(now())
