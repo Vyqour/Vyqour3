@@ -338,12 +338,15 @@ export class QikinkService {
     }
 
     if (becameShipped && order.user?.email) {
-      await this.mail.sendShippingNotification(
-        order.user.email,
-        order.orderNumber,
-        update.awb || order.trackingNumber || undefined,
-        update.courier || order.carrier || undefined,
-      );
+      // Fire-and-forget: don't delay the webhook response on SMTP
+      this.mail
+        .sendShippingNotification(
+          order.user.email,
+          order.orderNumber,
+          update.awb || order.trackingNumber || undefined,
+          update.courier || order.carrier || undefined,
+        )
+        .catch(() => undefined);
     }
 
     await this.prisma.auditLog.create({
