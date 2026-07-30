@@ -204,7 +204,6 @@ export class ProductsService {
         qikinkDesigns: dto.qikinkDesigns as unknown as Prisma.InputJsonValue,
         qikinkSearchFromMyProducts: dto.qikinkSearchFromMyProducts,
         publishedAt: dto.status === ProductStatus.ACTIVE ? new Date() : null,
-        publishedAt: dto.status === ProductStatus.ACTIVE ? new Date() : null,
         images: dto.images?.length
           ? {
               create: dto.images.map((img, i) => ({
