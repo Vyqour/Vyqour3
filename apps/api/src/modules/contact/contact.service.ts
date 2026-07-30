@@ -27,8 +27,10 @@ export class ContactService {
       message: escapeHtml(input.message).replace(/\n/g, '<br/>'),
     };
 
-    await this.mail.sendContactMessage(adminEmail, safe);
     this.logger.log(`Contact message received from ${input.email}: ${input.subject}`);
+    // Fire-and-forget: never make the visitor wait on SMTP for this response.
+    // If SMTP is slow/down, MailService logs the failure — message content is also logged above.
+    this.mail.sendContactMessage(adminEmail, safe).catch(() => undefined);
 
     return { success: true, message: 'Message sent — we will reply soon.' };
   }
