@@ -76,28 +76,33 @@ export function mapOrderToQikinkPayload(
     };
 
     if (searchFrom === 0) {
-      const designCode = product.qikinkDesignCode || product.slug.slice(0, 40);
-      const designUrl = product.qikinkDesignUrl || item.imageUrl || '';
-      const mockupUrl =
-        product.qikinkMockupUrl || product.qikinkDesignUrl || item.imageUrl || designUrl;
-      if (!designUrl && !product.qikinkDesignCode) {
+      const rawDesigns = Array.isArray(product.qikinkDesigns)
+        ? (product.qikinkDesigns as unknown as Array<{
+            placement?: string;
+            designCode?: string;
+            designUrl?: string;
+            mockupUrl?: string;
+          }>)
+        : [];
+
+      const validDesigns = rawDesigns.filter((d) => d && d.designUrl);
+
+      if (!validDesigns.length) {
         throw new BadRequestException(
-          `Design URL/code required for "${item.productName}" when search_from_my_products=0`,
+          `No print-ready design uploaded for "${item.productName}". Add at least one placement (front/back) in the product's Qikink settings.`,
         );
       }
-      line.print_type_id = product.qikinkPrintTypeId || 1;
-      line.designs = [
-        {
-          design_code: designCode,
-          width_inches: '',
-          height_inches: '',
-          placement_sku: product.qikinkPlacementSku || 'fr',
-          design_link: designUrl,
-          mockup_link: mockupUrl,
-        },
-      ];
-    }
 
+      line.print_type_id = product.qikinkPrintTypeId || 1;
+      line.designs = validDesigns.map((d) => ({
+        design_code: d.designCode || product.slug.slice(0, 40),
+        width_inches: '',
+        height_inches: '',
+        placement_sku: d.placement || 'fr',
+        design_link: d.designUrl!,
+        mockup_link: d.mockupUrl || d.designUrl!,
+      }));
+                                                       }
     return line;
   });
 
