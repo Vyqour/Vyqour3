@@ -140,11 +140,10 @@ export class OrdersService {
       return created;
     });
 
-    await this.mail.sendOrderConfirmation(
-      order.user.email,
-      order.orderNumber,
-      String(order.total),
-    );
+    // Fire-and-forget: a slow/unreachable SMTP server must never block or fail order placement
+this.mail
+  .sendOrderConfirmation(order.user.email, order.orderNumber, String(order.total))
+  .catch(() => undefined);
 
     // COD: confirmed immediately → queue Qikink fulfillment (idempotent)
     if (dto.paymentMethod === PaymentMethod.COD) {
