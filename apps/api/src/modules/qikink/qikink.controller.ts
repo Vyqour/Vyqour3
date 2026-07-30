@@ -127,10 +127,7 @@ export class QikinkController {
       data: {
         qikinkSku: dto.qikinkSku,
         qikinkPrintTypeId: dto.qikinkPrintTypeId,
-        qikinkDesignCode: dto.qikinkDesignCode,
-        qikinkDesignUrl: dto.qikinkDesignUrl,
-        qikinkMockupUrl: dto.qikinkMockupUrl,
-        qikinkPlacementSku: dto.qikinkPlacementSku,
+        qikinkDesigns: dto.qikinkDesigns as unknown as Prisma.InputJsonValue,
         qikinkSearchFromMyProducts: dto.qikinkSearchFromMyProducts,
       },
     });
