@@ -199,6 +199,11 @@ export class ProductsService {
         careInstructions: dto.careInstructions,
         seoTitle: dto.seoTitle,
         seoDescription: dto.seoDescription,
+        qikinkSku: dto.qikinkSku,
+        qikinkPrintTypeId: dto.qikinkPrintTypeId,
+        qikinkDesigns: dto.qikinkDesigns as unknown as Prisma.InputJsonValue,
+        qikinkSearchFromMyProducts: dto.qikinkSearchFromMyProducts,
+        publishedAt: dto.status === ProductStatus.ACTIVE ? new Date() : null,
         publishedAt: dto.status === ProductStatus.ACTIVE ? new Date() : null,
         images: dto.images?.length
           ? {
@@ -260,6 +265,10 @@ export class ProductsService {
         careInstructions: dto.careInstructions,
         seoTitle: dto.seoTitle,
         seoDescription: dto.seoDescription,
+        qikinkSku: dto.qikinkSku,
+        qikinkPrintTypeId: dto.qikinkPrintTypeId,
+        qikinkDesigns: dto.qikinkDesigns as unknown as Prisma.InputJsonValue,
+        qikinkSearchFromMyProducts: dto.qikinkSearchFromMyProducts,
       };
       if (dto.categoryId) data.category = { connect: { id: dto.categoryId } };
       if (dto.collectionId !== undefined) {
