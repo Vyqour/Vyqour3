@@ -19,6 +19,9 @@ export class MailService {
         port: this.config.get<number>('smtp.port') || 587,
         secure: false,
         auth: { user, pass },
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 15_000,
       });
     } else {
       this.logger.warn('SMTP not configured — emails will be logged only');
