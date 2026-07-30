@@ -27,6 +27,19 @@ type Category = { id: string; name: string; slug: string };
 
 type Collection = { id: string; name: string; slug: string };
 
+type QikinkDesignEntry = {
+  placement: string;
+  designCode: string;
+  designUrl: string;
+  mockupUrl?: string;
+};
+
+const QIKINK_PLACEMENTS = [
+  { value: 'fr', label: 'Front' },
+  { value: 'bk', label: 'Back' },
+  { value: 'ls', label: 'Left sleeve' },
+  { value: 'rs', label: 'Right sleeve' },
+];
 type ProductImage = {
   url: string;
   alt?: string;
