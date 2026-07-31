@@ -33,7 +33,6 @@ export default function AdminQikinkPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
   const [orderId, setOrderId] = useState('');
 
   const load = async () => {
@@ -86,32 +85,6 @@ export default function AdminQikinkPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            loading={syncing}
-            onClick={async () => {
-              setSyncing(true);
-              try {
-                const res = await apiClient.post<{ result?: { note?: string; error?: string; imported?: number } }>(
-                  '/qikink/products/sync',
-                  {},
-                  { auth: true },
-                );
-                toast.message(
-                  res.result?.note ||
-                    res.result?.error ||
-                    `Synced ${res.result?.imported ?? 0} catalog rows`,
-                );
-                await load();
-              } catch (e) {
-                toast.error(e instanceof Error ? e.message : 'Sync failed');
-              } finally {
-                setSyncing(false);
-              }
-            }}
-          >
-            Sync products
-          </Button>
           <Button variant="ghost" onClick={load}>
             Refresh
           </Button>
