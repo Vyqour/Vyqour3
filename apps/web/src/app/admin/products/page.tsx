@@ -119,7 +119,6 @@ type DraftForm = {
   /** variants as simple lines: SKU | size | color | stock | price */
   variantsText: string;
   expanded: boolean;
-  expanded: boolean;
   saving: boolean;
   isNew: boolean;
 };
