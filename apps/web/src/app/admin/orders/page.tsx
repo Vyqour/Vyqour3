@@ -27,6 +27,15 @@ export default function AdminOrdersPage() {
 
   const cols = ['orderNumber', 'status', 'total'];
 
+  const copyId = async (id: string) => {
+    try {
+      await navigator.clipboard.writeText(id);
+      alert(`Order ID copied: ${id}`);
+    } catch {
+      window.prompt('Copy this order ID:', id);
+    }
+  };
+
   return (
     <div className="glass rounded-2xl p-5 overflow-x-auto">
       <h2 className="font-medium mb-4">Orders ({rows.length})</h2>
@@ -36,6 +45,7 @@ export default function AdminOrdersPage() {
             {cols.map((c) => (
               <th key={c} className="pb-3 pr-4">{c}</th>
             ))}
+            <th className="pb-3 pr-4">Order ID (for Qikink retry)</th>
           </tr>
         </thead>
         <tbody>
@@ -46,6 +56,18 @@ export default function AdminOrdersPage() {
                   {String(r[c] ?? '—')}
                 </td>
               ))}
+              <td className="py-3 pr-4">
+                {r.id ? (
+                  <button
+                    onClick={() => copyId(String(r.id))}
+                    className="rounded-lg border border-white/10 px-2 py-1 text-xs text-muted-foreground hover:text-white"
+                  >
+                    Copy ID
+                  </button>
+                ) : (
+                  '—'
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -53,4 +75,4 @@ export default function AdminOrdersPage() {
       {!rows.length && <p className="text-muted-foreground text-sm mt-4">No records yet.</p>}
     </div>
   );
-}
+        }
