@@ -118,8 +118,7 @@ type DraftForm = {
   qikinkDesigns: QikinkDesignEntry[];
   /** variants as simple lines: SKU | size | color | stock | price */
   variantsText: string;
-  /** variants as simple lines: SKU | size | color | stock | price */
-  variantsText: string;
+  expanded: boolean;
   expanded: boolean;
   saving: boolean;
   isNew: boolean;
