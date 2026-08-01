@@ -95,7 +95,7 @@ export function mapOrderToQikinkPayload(
 
       line.print_type_id = product.qikinkPrintTypeId || 1;
       line.designs = validDesigns.map((d) => ({
-        design_code: d.designCode || product.slug.slice(0, 40),
+        design_code: d.designCode || product.slug.slice(0, 20),
         width_inches: '',
         height_inches: '',
         placement_sku: d.placement || 'fr',
