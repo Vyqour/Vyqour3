@@ -77,6 +77,26 @@ export class ProductVariantDto {
   imageUrl?: string;
 }
 
+export class QikinkDesignDto {
+  @ApiProperty({ description: 'Print placement, e.g. "fr" (front), "bk" (back)' })
+  @IsString()
+  placement!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  designCode?: string;
+
+  @ApiProperty({ description: 'Print-ready design file URL sent to Qikink' })
+  @IsString()
+  designUrl!: string;
+
+  @ApiPropertyOptional({ description: 'Internal reference mockup URL, never printed' })
+  @IsOptional()
+  @IsString()
+  mockupUrl?: string;
+}
+
 export class CreateProductDto {
   @ApiProperty()
   @IsString()
@@ -199,29 +219,13 @@ export class CreateProductDto {
   @ApiPropertyOptional({
     description:
       'Array of print placements (front/back/sleeve etc). Each item needs a print-ready designUrl (never shown to customers). Required when qikinkSearchFromMyProducts = 0.',
-    type: 'array',
-    example: [
-      {
-        placement: 'fr',
-        designCode: 'SAMURAI-FRONT',
-        designUrl: 'https://res.cloudinary.com/.../front.png',
-        mockupUrl: 'https://res.cloudinary.com/.../front-mockup.png',
-      },
-      {
-        placement: 'bk',
-        designCode: 'SAMURAI-BACK',
-        designUrl: 'https://res.cloudinary.com/.../back.png',
-      },
-    ],
+    type: [QikinkDesignDto],
   })
   @IsOptional()
   @IsArray()
-  qikinkDesigns?: Array<{
-    placement: string;
-    designCode?: string;
-    designUrl: string;
-    mockupUrl?: string;
-  }>;
+  @ValidateNested({ each: true })
+  @Type(() => QikinkDesignDto)
+  qikinkDesigns?: QikinkDesignDto[];
 
   @ApiPropertyOptional({
     description:
