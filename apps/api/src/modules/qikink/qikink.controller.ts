@@ -115,6 +115,16 @@ export class QikinkController {
     return this.prisma.qikinkJob.findMany({
       orderBy: { createdAt: 'desc' },
       take: 100,
+      include: {
+        order: {
+          select: {
+            orderNumber: true,
+            qikinkOrderId: true,
+            qikinkOrderNumber: true,
+            qikinkSyncStatus: true,
+          },
+        },
+      },
     });
   }
 
