@@ -15,8 +15,13 @@ type Job = {
   attempts: number;
   error?: string | null;
   createdAt: string;
+  order?: {
+    orderNumber?: string | null;
+    qikinkOrderId?: string | null;
+    qikinkOrderNumber?: string | null;
+    qikinkSyncStatus?: string | null;
+  } | null;
 };
-
 type Log = {
   id: string;
   direction: string;
@@ -142,6 +147,7 @@ export default function AdminQikinkPage() {
               <th className="pb-2 pr-3">Type</th>
               <th className="pb-2 pr-3">Status</th>
               <th className="pb-2 pr-3">Order</th>
+              <th className="pb-2 pr-3">Qikink Order ID</th>
               <th className="pb-2 pr-3">Attempts</th>
               <th className="pb-2">Error</th>
             </tr>
@@ -153,7 +159,18 @@ export default function AdminQikinkPage() {
                 <td className="py-2 pr-3">
                   <Badge variant="outline">{j.status}</Badge>
                 </td>
-                <td className="py-2 pr-3 font-mono text-xs">{j.orderId || '—'}</td>
+                <td className="py-2 pr-3 font-mono text-xs">
+                  {j.order?.orderNumber || j.orderId || '—'}
+                </td>
+                <td className="py-2 pr-3 font-mono text-xs">
+                  {j.order?.qikinkOrderId ? (
+                    <span className="text-green-400">{j.order.qikinkOrderId}</span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {j.order?.qikinkSyncStatus || '—'}
+                    </span>
+                  )}
+                </td>
                 <td className="py-2 pr-3">{j.attempts}</td>
                 <td className="max-w-[280px] truncate py-2 text-xs text-red-400">{j.error || '—'}</td>
               </tr>
