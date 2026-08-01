@@ -998,13 +998,17 @@ export default function AdminProductsPage() {
                               </Field>
                               <Field
                                 label="Design code"
-                                hint="A short reference code for this design (letters/numbers)"
+                                hint="Max 20 characters. Leave blank to auto-use the product slug (trimmed to 20 chars)."
                               >
                                 <Input
                                   value={entry.designCode}
+                                  maxLength={20}
                                   onChange={(e) => {
                                     const next = [...d.qikinkDesigns];
-                                    next[idx] = { ...next[idx], designCode: e.target.value };
+                                    next[idx] = {
+                                      ...next[idx],
+                                      designCode: e.target.value.slice(0, 20),
+                                    };
                                     updateDraft(d.localKey, { qikinkDesigns: next });
                                   }}
                                 />
