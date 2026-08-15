@@ -136,7 +136,7 @@ export class QikinkController {
       where: { id: productId },
       data: {
         qikinkSku: dto.qikinkSku,
-        qikinkPrintTypeId: dto.qikinkPrintTypeId,
+        qikinkPrintTypeId: 1, // DTG only — fixed for all products
         qikinkDesigns: dto.qikinkDesigns as unknown as Prisma.InputJsonValue,
         qikinkSearchFromMyProducts: dto.qikinkSearchFromMyProducts,
       },
