@@ -887,7 +887,7 @@ export default function AdminProductsPage() {
                       Controls exactly what data is sent to Qikink when this product is ordered.
                     </p>
 
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="mt-4">
                       <Field label="Qikink SKU" hint="Catalog SKU from Qikink's product/SKU list">
                         <Input
                           value={d.qikinkSku}
@@ -895,15 +895,9 @@ export default function AdminProductsPage() {
                           placeholder="e.g. TS-RN-BLK-M"
                         />
                       </Field>
-                      <Field label="Print type ID" hint="From Qikink's SKU catalog — defaults to 1">
-                        <Input
-                          type="number"
-                          value={d.qikinkPrintTypeId}
-                          onChange={(e) =>
-                            updateDraft(d.localKey, { qikinkPrintTypeId: e.target.value })
-                          }
-                        />
-                      </Field>
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        Print method: DTG (fixed for all products).
+                      </p>
                     </div>
 
                     <div className="mt-4">
@@ -1010,24 +1004,47 @@ export default function AdminProductsPage() {
                                       designCode: e.target.value.slice(0, 20),
                                     };
                                     updateDraft(d.localKey, { qikinkDesigns: next });
-                                  }}
-                                />
-                              </Field>
-                            </div>
+{d.qikinkSearchFromMyProducts === '0' && (() => {
+                      const isAccessories =
+                        categories.find((c) => c.id === d.categoryId)?.slug === 'accessories';
+
+                      if (isAccessories) {
+                        const entry = d.qikinkDesigns[0] || {
+                          placement: 'fr',
+                          designCode: '',
+                          designUrl: '',
+                          mockupUrl: '',
+                        };
+                        const setEntry = (patch: Partial<QikinkDesignEntry>) =>
+                          updateDraft(d.localKey, {
+                            qikinkDesigns: [{ ...entry, ...patch, placement: 'fr' }],
+                          });
+
+                        return (
+                          <div className="mt-4 space-y-4">
+                            <p className="text-xs text-muted-foreground">
+                              Accessories use a single design upload (no front/back/sleeve
+                              placement).
+                            </p>
+                            <Field
+                              label="Design code"
+                              hint="Max 20 characters. Leave blank to auto-use the product slug (trimmed to 20 chars)."
+                            >
+                              <Input
+                                value={entry.designCode}
+                                maxLength={20}
+                                onChange={(e) =>
+                                  setEntry({ designCode: e.target.value.slice(0, 20) })
+                                }
+                              />
+                            </Field>
 
                             <ImageUploadField
                               folder="qikink-designs"
-                              label={`Print-ready design file — ${
-                                QIKINK_PLACEMENTS.find((p) => p.value === entry.placement)
-                                  ?.label || 'Front'
-                              }`}
-                              hint="Flat artwork only — no mockup, no mannequin, no shirt. This exact file is sent to Qikink for printing. Never shown to customers."
+                              label="Print-ready design file"
+                              hint="Flat artwork only — no mockup, no product photo. This exact file is sent to Qikink for printing. Never shown to customers."
                               value={entry.designUrl}
-                              onChange={(url) => {
-                                const next = [...d.qikinkDesigns];
-                                next[idx] = { ...next[idx], designUrl: url };
-                                updateDraft(d.localKey, { qikinkDesigns: next });
-                              }}
+                              onChange={(url) => setEntry({ designUrl: url })}
                               previewClassName="aspect-square"
                             />
 
@@ -1036,33 +1053,135 @@ export default function AdminProductsPage() {
                               label="Internal reference mockup (optional)"
                               hint="Optional preview for your own reference. Also never shown to customers — customer photos come from the Product Images section above."
                               value={entry.mockupUrl || ''}
-                              onChange={(url) => {
-                                const next = [...d.qikinkDesigns];
-                                next[idx] = { ...next[idx], mockupUrl: url };
-                                updateDraft(d.localKey, { qikinkDesigns: next });
-                              }}
+                              onChange={(url) => setEntry({ mockupUrl: url })}
                               previewClassName="aspect-square"
                             />
                           </div>
-                        ))}
+                        );
+                      }
 
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() =>
-                            updateDraft(d.localKey, {
-                              qikinkDesigns: [
-                                ...d.qikinkDesigns,
-                                { placement: 'fr', designCode: '', designUrl: '', mockupUrl: '' },
-                              ],
-                            })
-                          }
-                        >
-                          <Plus className="mr-1 h-3.5 w-3.5" /> Add print placement
-                        </Button>
-                      </div>
-                    )}
+                      return (
+                        <div className="mt-4 space-y-4">
+                          {d.qikinkDesigns.length === 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              No print placements added yet. Add one for each side you print on
+                              (e.g. Front, Back).
+                            </p>
+                          )}
+
+                          {d.qikinkDesigns.map((entry, idx) => (
+                            <div
+                              key={idx}
+                              className="space-y-4 rounded-lg border border-white/10 p-4"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-white">
+                                  Placement {idx + 1}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updateDraft(d.localKey, {
+                                      qikinkDesigns: d.qikinkDesigns.filter((_, i) => i !== idx),
+                                    })
+                                  }
+                                  className="text-xs text-red-400 hover:text-red-300"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+
+                              <div className="grid gap-4 md:grid-cols-2">
+                                <Field label="Print location">
+                                  <div className="flex flex-wrap gap-2">
+                                    {QIKINK_PLACEMENTS.map((opt) => (
+                                      <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => {
+                                          const next = [...d.qikinkDesigns];
+                                          next[idx] = { ...next[idx], placement: opt.value };
+                                          updateDraft(d.localKey, { qikinkDesigns: next });
+                                        }}
+                                        className={`rounded-lg border px-3 py-1.5 text-xs ${
+                                          entry.placement === opt.value
+                                            ? 'border-primary bg-primary/10 text-white'
+                                            : 'border-white/10 text-muted-foreground'
+                                        }`}
+                                      >
+                                        {opt.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </Field>
+                                <Field
+                                  label="Design code"
+                                  hint="Max 20 characters. Leave blank to auto-use the product slug (trimmed to 20 chars)."
+                                >
+                                  <Input
+                                    value={entry.designCode}
+                                    maxLength={20}
+                                    onChange={(e) => {
+                                      const next = [...d.qikinkDesigns];
+                                      next[idx] = {
+                                        ...next[idx],
+                                        designCode: e.target.value.slice(0, 20),
+                                      };
+                                      updateDraft(d.localKey, { qikinkDesigns: next });
+                                    }}
+                                  />
+                                </Field>
+                              </div>
+
+                              <ImageUploadField
+                                folder="qikink-designs"
+                                label={`Print-ready design file — ${
+                                  QIKINK_PLACEMENTS.find((p) => p.value === entry.placement)
+                                    ?.label || 'Front'
+                                }`}
+                                hint="Flat artwork only — no mockup, no mannequin, no shirt. This exact file is sent to Qikink for printing. Never shown to customers."
+                                value={entry.designUrl}
+                                onChange={(url) => {
+                                  const next = [...d.qikinkDesigns];
+                                  next[idx] = { ...next[idx], designUrl: url };
+                                  updateDraft(d.localKey, { qikinkDesigns: next });
+                                }}
+                                previewClassName="aspect-square"
+                              />
+
+                              <ImageUploadField
+                                folder="qikink-mockups"
+                                label="Internal reference mockup (optional)"
+                                hint="Optional preview for your own reference. Also never shown to customers — customer photos come from the Product Images section above."
+                                value={entry.mockupUrl || ''}
+                                onChange={(url) => {
+                                  const next = [...d.qikinkDesigns];
+                                  next[idx] = { ...next[idx], mockupUrl: url };
+                                  updateDraft(d.localKey, { qikinkDesigns: next });
+                                }}
+                                previewClassName="aspect-square"
+                              />
+                            </div>
+                          ))}
+
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() =>
+                              updateDraft(d.localKey, {
+                                qikinkDesigns: [
+                                  ...d.qikinkDesigns,
+                                  { placement: 'fr', designCode: '', designUrl: '', mockupUrl: '' },
+                                ],
+                              })
+                            }
+                          >
+                            <Plus className="mr-1 h-3.5 w-3.5" /> Add print placement
+                          </Button>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <Field
