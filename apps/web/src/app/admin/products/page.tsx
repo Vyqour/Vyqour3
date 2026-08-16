@@ -411,7 +411,7 @@ export default function AdminProductsPage() {
       seoTitle: d.seoTitle.trim() || undefined,
       seoDescription: d.seoDescription.trim() || undefined,
       qikinkSku: d.qikinkSku.trim() || undefined,
-      qikinkPrintTypeId: d.qikinkPrintTypeId ? Number(d.qikinkPrintTypeId) : undefined,
+      qikinkPrintTypeId: 1, // DTG only — fixed for all products
       qikinkSearchFromMyProducts: Number(d.qikinkSearchFromMyProducts),
       qikinkDesigns:
         d.qikinkDesigns.filter((x) => x.designUrl.trim()).length > 0
@@ -936,75 +936,7 @@ export default function AdminProductsPage() {
                       </Field>
                     </div>
 
-                    {d.qikinkSearchFromMyProducts === '0' && (
-                      <div className="mt-4 space-y-4">
-                        {d.qikinkDesigns.length === 0 && (
-                          <p className="text-xs text-muted-foreground">
-                            No print placements added yet. Add one for each side you print on
-                            (e.g. Front, Back).
-                          </p>
-                        )}
-
-                        {d.qikinkDesigns.map((entry, idx) => (
-                          <div
-                            key={idx}
-                            className="space-y-4 rounded-lg border border-white/10 p-4"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-medium text-white">
-                                Placement {idx + 1}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateDraft(d.localKey, {
-                                    qikinkDesigns: d.qikinkDesigns.filter((_, i) => i !== idx),
-                                  })
-                                }
-                                className="text-xs text-red-400 hover:text-red-300"
-                              >
-                                Remove
-                              </button>
-                            </div>
-
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <Field label="Print location">
-                                <div className="flex flex-wrap gap-2">
-                                  {QIKINK_PLACEMENTS.map((opt) => (
-                                    <button
-                                      key={opt.value}
-                                      type="button"
-                                      onClick={() => {
-                                        const next = [...d.qikinkDesigns];
-                                        next[idx] = { ...next[idx], placement: opt.value };
-                                        updateDraft(d.localKey, { qikinkDesigns: next });
-                                      }}
-                                      className={`rounded-lg border px-3 py-1.5 text-xs ${
-                                        entry.placement === opt.value
-                                          ? 'border-primary bg-primary/10 text-white'
-                                          : 'border-white/10 text-muted-foreground'
-                                      }`}
-                                    >
-                                      {opt.label}
-                                    </button>
-                                  ))}
-                                </div>
-                              </Field>
-                              <Field
-                                label="Design code"
-                                hint="Max 20 characters. Leave blank to auto-use the product slug (trimmed to 20 chars)."
-                              >
-                                <Input
-                                  value={entry.designCode}
-                                  maxLength={20}
-                                  onChange={(e) => {
-                                    const next = [...d.qikinkDesigns];
-                                    next[idx] = {
-                                      ...next[idx],
-                                      designCode: e.target.value.slice(0, 20),
-                                    };
-                                    updateDraft(d.localKey, { qikinkDesigns: next });
-{d.qikinkSearchFromMyProducts === '0' && (() => {
+                    {d.qikinkSearchFromMyProducts === '0' && (() => {
                       const isAccessories =
                         categories.find((c) => c.id === d.categoryId)?.slug === 'accessories';
 
@@ -1261,4 +1193,5 @@ function Field({
       {hint && <span className="block text-[11px] text-muted-foreground">{hint}</span>}
     </label>
   );
-}
+  }
+  
