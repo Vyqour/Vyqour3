@@ -206,14 +206,7 @@ export default function AdminOrdersPage() {
                     </button>
                   </div>
 
-                  <details className="mt-4">
-                    <summary className="cursor-pointer text-[11px] text-muted-foreground">
-                      Debug: raw data (temporary)
-                    </summary>
-                    <pre className="mt-2 max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-black/40 p-3 text-[10px] text-muted-foreground">
-                      {JSON.stringify({ shippingAddress: o.shippingAddress, user: o.user }, null, 2)}
-                    </pre>
-                  </details>
+                  
                 </div>
               )}
             </div>
