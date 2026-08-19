@@ -312,7 +312,8 @@ this.mail
         where,
         include: {
           items: true,
-          user: { select: { id: true, email: true, firstName: true, lastName: true } },
+          user: { select: { id: true, email: true, firstName: true, lastName: true, phone: true } },
+          shippingAddress: true,
         },
         orderBy: { createdAt: 'desc' },
         skip,
