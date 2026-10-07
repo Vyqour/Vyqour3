@@ -50,6 +50,7 @@ type ProductImage = {
 
 type ProductVariant = {
   sku: string;
+  qikinkSku?: string;
   size?: string;
   color?: string;
   colorHex?: string;
@@ -116,7 +117,7 @@ type DraftForm = {
   qikinkPrintTypeId: string;
   qikinkSearchFromMyProducts: '0' | '1';
   qikinkDesigns: QikinkDesignEntry[];
-  /** variants as simple lines: SKU | size | color | stock | price */
+  /** variants as simple lines: SKU | Qikink SKU | size | color | stock | price */
   variantsText: string;
   expanded: boolean;
   saving: boolean;
@@ -152,7 +153,7 @@ function makeTemplate(categoryId = '', collectionId = ''): DraftForm {
   const variants = SIZES.flatMap((size) =>
     COLORS.map(
       (c) =>
-        `${slugify(name)}-${size.toLowerCase()}-${c.name.toLowerCase()} | ${size} | ${c.name} | 10 | `,
+        `${slugify(name)}-${size.toLowerCase()}-${c.name.toLowerCase()} | | ${size} | ${c.name} | 10 | `,
     ),
   ).join('\n');
 
@@ -193,7 +194,7 @@ function makeTemplate(categoryId = '', collectionId = ''): DraftForm {
 function productToDraft(p: Product): DraftForm {
   const variantsText = (p.variants || [])
     .map((v) =>
-      [v.sku, v.size || '', v.color || '', v.stock ?? 0, v.price ?? ''].join(' | '),
+      [v.sku, v.qikinkSku || '', v.size || '', v.color || '', v.stock ?? 0, v.price ?? ''].join(' | '),
     )
     .join('\n');
   const primary =
@@ -247,10 +248,11 @@ function parseVariants(text: string, fallbackPrice: number): ProductVariant[] {
     .filter(Boolean)
     .map((line, idx) => {
       const parts = line.split('|').map((p) => p.trim());
-      const [sku, size, color, stock, price] = parts;
+      const [sku, qikinkSku, size, color, stock, price] = parts;
       const colorMeta = COLORS.find((c) => c.name.toLowerCase() === (color || '').toLowerCase());
       return {
         sku: sku || `SKU-${idx + 1}`,
+        qikinkSku: qikinkSku?.trim() || undefined,
         size: size || undefined,
         color: color || undefined,
         colorHex: colorMeta?.hex,
@@ -425,8 +427,7 @@ export default function AdminProductsPage() {
               }))
           : undefined,
       images,
-      // variants only on create (API update does not replace variants yet)
-      ...(d.isNew ? { variants } : {}),
+      variants,
     };
   };
 
@@ -1116,17 +1117,10 @@ export default function AdminProductsPage() {
                     })()}
                   </div>
 
-                  <Field
-                    label={
-                      d.isNew
-                        ? 'Variants (one per line: SKU | size | color | stock | price)'
-                        : 'Variants (read-only on edit — set on create)'
-                    }
-                  >
+                  <Field label="Variants (one per line: SKU | Qikink SKU | size | color | stock | price)">
                     <Textarea
                       rows={6}
                       value={d.variantsText}
-                      disabled={!d.isNew}
                       onChange={(e) => updateDraft(d.localKey, { variantsText: e.target.value })}
                       className="font-mono text-xs"
                     />

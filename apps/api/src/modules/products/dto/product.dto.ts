@@ -47,6 +47,11 @@ export class ProductVariantDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  qikinkSku?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   size?: string;
 
   @ApiPropertyOptional()
