@@ -414,13 +414,16 @@ export default function AdminProductsPage() {
 
     const qikinkDesigns = customDesigns.map((x, idx) => {
       const designCode = x.designCode.trim();
+      if (!designCode) {
+        throw new Error(`Design code is required for design placement ${idx + 1}.`);
+      }
       if (designCode.length > 15) {
         throw new Error(
           `Design code "${designCode}" exceeds Qikink maximum limit of 15 characters.`,
         );
       }
 
-      const placementSku = (x.placementSku || x.placement)?.trim();
+      const placementSku = x.placementSku?.trim();
       if (!placementSku) {
         throw new Error(`Placement SKU is required for design placement ${idx + 1}.`);
       }
@@ -1009,14 +1012,26 @@ export default function AdminProductsPage() {
                               placement).
                             </p>
                             <Field
-                              label="Design code"
-                              hint="Max 15 characters. Leave blank to auto-use product slug (truncated to 15 chars max)."
+                              label="Design code *"
+                              hint="Max 15 characters. Must be a valid unique code for Qikink."
                             >
                               <Input
                                 value={entry.designCode}
                                 onChange={(e) =>
                                   setEntry({ designCode: e.target.value })
                                 }
+                              />
+                            </Field>
+                            <Field
+                              label="Placement SKU *"
+                              hint="Exact Qikink placement SKU (e.g. fr, bk, ls, rs)."
+                            >
+                              <Input
+                                value={entry.placementSku || ''}
+                                onChange={(e) =>
+                                  setEntry({ placementSku: e.target.value })
+                                }
+                                placeholder="e.g. fr"
                               />
                             </Field>
 
@@ -1096,8 +1111,8 @@ export default function AdminProductsPage() {
                                   </div>
                                 </Field>
                                 <Field
-                                  label="Design code"
-                                  hint="Max 15 characters. Leave blank to auto-use product slug (truncated to 15 chars max)."
+                                  label="Design code *"
+                                  hint="Max 15 characters. Must be a valid unique code for Qikink."
                                 >
                                   <Input
                                     value={entry.designCode}
@@ -1114,7 +1129,7 @@ export default function AdminProductsPage() {
                               </div>
 
                               <div className="grid gap-4 md:grid-cols-3">
-                                <Field label="Placement SKU (optional)" hint="Override Qikink placement SKU if needed">
+                                <Field label="Placement SKU *" hint="Exact Qikink placement SKU (e.g. fr, bk, ls, rs)">
                                   <Input
                                     value={entry.placementSku || ''}
                                     onChange={(e) => {

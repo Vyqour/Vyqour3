@@ -109,21 +109,22 @@ export function mapOrderToQikinkPayload(
         catName.includes('all over print');
 
       line.designs = validDesigns.map((d) => {
-        let designCode = d.designCode?.trim();
-        if (designCode) {
-          if (designCode.length > 15) {
-            throw new BadRequestException(
-              `Qikink design_code for product "${item.productName}" exceeds maximum 15 characters ("${designCode}").`,
-            );
-          }
-        } else {
-          designCode = product.slug.slice(0, 15);
+        const designCode = d.designCode?.trim();
+        if (!designCode) {
+          throw new BadRequestException(
+            `Missing design_code for design placement in product "${item.productName}". Set a design_code (max 15 chars) in the product editor.`,
+          );
+        }
+        if (designCode.length > 15) {
+          throw new BadRequestException(
+            `Qikink design_code for product "${item.productName}" exceeds maximum 15 characters ("${designCode}").`,
+          );
         }
 
-        const placementSku = (d.placementSku || d.placement)?.trim();
+        const placementSku = d.placementSku?.trim();
         if (!placementSku) {
           throw new BadRequestException(
-            `Missing placement_sku for design in product "${item.productName}".`,
+            `Missing placement_sku for design placement in product "${item.productName}". Set a placement_sku in the product editor.`,
           );
         }
 
