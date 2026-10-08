@@ -194,42 +194,61 @@ export class PaymentsService {
         throw new BadRequestException('Invalid payment signature');
       }
 
-      // 2. Trusted Server-Side Fetch & Validation from Razorpay API
+      // 2. Fail-Closed Server-Side Fetch & Validation from Razorpay API
+      let rzpPayment: {
+        id?: string;
+        order_id?: string;
+        amount?: number;
+        currency?: string;
+        status?: string;
+      };
       try {
         const auth = Buffer.from(`${this.keyId}:${this.keySecret}`).toString('base64');
         const res = await fetch(`https://api.razorpay.com/v1/payments/${payload.razorpayPaymentId}`, {
           headers: { Authorization: `Basic ${auth}` },
         });
-        if (res.ok) {
-          const rzpPayment = (await res.json()) as {
-            order_id?: string;
-            amount?: number;
-            currency?: string;
-            status?: string;
-          };
 
-          if (rzpPayment.order_id && rzpPayment.order_id !== payload.razorpayOrderId) {
-            throw new BadRequestException(
-              `Razorpay payment ID ${payload.razorpayPaymentId} belongs to order ${rzpPayment.order_id}, not ${payload.razorpayOrderId}`,
-            );
-          }
-
-          const expectedAmount = Math.round(Number(order.total) * 100);
-          if (rzpPayment.amount != null && rzpPayment.amount !== expectedAmount) {
-            throw new BadRequestException(
-              `Payment amount mismatch: expected ${expectedAmount} paise, received ${rzpPayment.amount} paise`,
-            );
-          }
-
-          if (rzpPayment.currency && rzpPayment.currency.toUpperCase() !== 'INR') {
-            throw new BadRequestException(
-              `Payment currency mismatch: expected INR, received ${rzpPayment.currency}`,
-            );
-          }
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          this.logger.error(`Razorpay API payment lookup failed (${res.status}): ${text}`);
+          throw new BadRequestException(`Failed to verify payment details with Razorpay API (status ${res.status})`);
         }
+
+        rzpPayment = (await res.json()) as typeof rzpPayment;
       } catch (err) {
         if (err instanceof BadRequestException) throw err;
-        this.logger.warn(`Server-side fetch for payment ${payload.razorpayPaymentId} skipped: ${(err as Error).message}`);
+        this.logger.error(`Server-side Razorpay API fetch threw error: ${(err as Error).message}`);
+        throw new BadRequestException(`Failed to verify payment details with Razorpay API: ${(err as Error).message}`);
+      }
+
+      if (!rzpPayment || typeof rzpPayment !== 'object') {
+        throw new BadRequestException('Invalid payment response received from Razorpay API');
+      }
+
+      if (!rzpPayment.order_id || rzpPayment.order_id !== payload.razorpayOrderId) {
+        throw new BadRequestException(
+          `Razorpay payment ID ${payload.razorpayPaymentId} belongs to order ${rzpPayment.order_id || 'unknown'}, expected ${payload.razorpayOrderId}`,
+        );
+      }
+
+      const expectedAmount = Math.round(Number(order.total) * 100);
+      if (rzpPayment.amount == null || rzpPayment.amount !== expectedAmount) {
+        throw new BadRequestException(
+          `Payment amount mismatch: expected ${expectedAmount} paise, received ${rzpPayment.amount}`,
+        );
+      }
+
+      if (!rzpPayment.currency || rzpPayment.currency.toUpperCase() !== 'INR') {
+        throw new BadRequestException(
+          `Payment currency mismatch: expected INR, received ${rzpPayment.currency}`,
+        );
+      }
+
+      const validStatuses = ['captured', 'authorized'];
+      if (!rzpPayment.status || !validStatuses.includes(rzpPayment.status.toLowerCase())) {
+        throw new BadRequestException(
+          `Payment is not in a captured/authorized state (status: ${rzpPayment.status})`,
+        );
       }
     } else {
       if (isProd || !payload.razorpayOrderId.startsWith('order_mock_')) {
