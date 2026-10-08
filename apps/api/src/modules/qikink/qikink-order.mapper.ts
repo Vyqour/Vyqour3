@@ -53,16 +53,12 @@ export function mapOrderToQikinkPayload(
   const line_items: QikinkLineItem[] = order.items.map((item) => {
     const product = item.product;
     const variant = item.variant;
-    const sku =
-      variant?.qikinkSku ||
-      product.qikinkSku ||
-      variant?.sku ||
-      item.sku ||
-      product.sku;
+    const sku = variant?.qikinkSku?.trim() || product.qikinkSku?.trim();
 
     if (!sku) {
+      const variantSkuStr = variant?.sku ? ` (variant SKU: ${variant.sku})` : '';
       throw new BadRequestException(
-        `Missing Qikink SKU for product "${item.productName}". Set product/variant qikinkSku.`,
+        `Missing Qikink SKU for product "${item.productName}"${variantSkuStr}. Set product or variant qikinkSku in the admin editor.`,
       );
     }
 
