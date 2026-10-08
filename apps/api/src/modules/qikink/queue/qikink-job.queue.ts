@@ -26,27 +26,29 @@ export class QikinkJobQueue {
       maxAttempts?: number;
     } = {},
   ) {
-    // Idempotent enqueue for submit jobs on same order while pending/processing
-    if (opts.orderId && type === QikinkJobType.SUBMIT_ORDER) {
-      const existing = await this.prisma.qikinkJob.findFirst({
-        where: {
-          orderId: opts.orderId,
+    return this.prisma.$transaction(async (tx) => {
+      // Idempotent enqueue for submit jobs on same order while pending/processing
+      if (opts.orderId && type === QikinkJobType.SUBMIT_ORDER) {
+        const existing = await tx.qikinkJob.findFirst({
+          where: {
+            orderId: opts.orderId,
+            type,
+            status: { in: [QikinkJobStatus.PENDING, QikinkJobStatus.PROCESSING] },
+          },
+        });
+        if (existing) return existing;
+      }
+
+      return tx.qikinkJob.create({
+        data: {
           type,
-          status: { in: [QikinkJobStatus.PENDING, QikinkJobStatus.PROCESSING] },
+          orderId: opts.orderId,
+          payload: opts.payload,
+          runAfter: opts.runAfter || new Date(),
+          maxAttempts: opts.maxAttempts || this.maxAttempts(),
+          status: QikinkJobStatus.PENDING,
         },
       });
-      if (existing) return existing;
-    }
-
-    return this.prisma.qikinkJob.create({
-      data: {
-        type,
-        orderId: opts.orderId,
-        payload: opts.payload,
-        runAfter: opts.runAfter || new Date(),
-        maxAttempts: opts.maxAttempts || this.maxAttempts(),
-        status: QikinkJobStatus.PENDING,
-      },
     });
   }
 

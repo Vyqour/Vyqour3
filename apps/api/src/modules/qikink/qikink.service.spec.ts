@@ -82,7 +82,9 @@ describe('QikinkService - Order Submission Hardening', () => {
       auditLog: {
         create: jest.fn(),
       },
-      $transaction: jest.fn((promises) => Promise.all(promises)),
+      $transaction: jest.fn((promises) =>
+        Array.isArray(promises) ? Promise.all(promises) : promises(mockPrisma),
+      ),
     };
 
     mockConfig = {
@@ -161,7 +163,7 @@ describe('QikinkService - Order Submission Hardening', () => {
 
   it('3. Concurrent submission protection - skips if atomic claim fails', async () => {
     mockPrisma.order.findUnique.mockResolvedValue(baseOrder);
-    mockPrisma.order.updateMany.mockResolvedValue({ count: 0 }); // Claim failed (another worker active)
+    mockPrisma.order.updateMany.mockResolvedValue({ count: 0 }); // Claim failed
 
     const result = await service.processSubmitJob('order_1');
 
@@ -172,35 +174,25 @@ describe('QikinkService - Order Submission Hardening', () => {
     expect(mockClient.createOrder).not.toHaveBeenCalled();
   });
 
-  it('4. Prepaid payment gate - rejects unpaid prepaid orders', async () => {
-    mockPrisma.order.findUnique.mockResolvedValue({
-      ...baseOrder,
-      paymentMethod: PaymentMethod.RAZORPAY,
-      paymentStatus: PaymentStatus.PENDING,
-    });
-
-    await expect(service.processSubmitJob('order_1')).rejects.toThrow(
-      BadRequestException,
-    );
-    expect(mockClient.createOrder).not.toHaveBeenCalled();
-  });
-
-  it('5. COD submission - allows COD orders to submit without prepaid check', async () => {
-    mockPrisma.order.findUnique.mockResolvedValue({
-      ...baseOrder,
-      paymentMethod: PaymentMethod.COD,
-      paymentStatus: PaymentStatus.PENDING,
-    });
+  it('4. Transient API failure -> keeps qikinkSyncStatus QUEUED for retries', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue(baseOrder);
     mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
-    mockClient.createOrder.mockResolvedValue({ order_id: 'QIK_COD_123' });
+    mockClient.createOrder.mockRejectedValue(new Error('Network timeout'));
 
-    const result = await service.processSubmitJob('order_1');
+    await expect(service.processSubmitJob('order_1')).rejects.toThrow('Network timeout');
 
-    expect(result.success).toBe(true);
-    expect(result.qikinkOrderId).toBe('QIK_COD_123');
+    expect(mockPrisma.order.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'order_1' },
+        data: expect.objectContaining({
+          qikinkSyncStatus: QikinkSyncStatus.QUEUED,
+          qikinkLastError: 'Network timeout',
+        }),
+      }),
+    );
   });
 
-  it('6. Permanent failure - marks error as permanent on validation failure', async () => {
+  it('5. Permanent validation failure -> sets qikinkSyncStatus FAILED and marks error permanent', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       ...baseOrder,
       items: [
@@ -208,7 +200,7 @@ describe('QikinkService - Order Submission Hardening', () => {
           ...baseOrder.items[0],
           product: {
             ...baseOrder.items[0].product,
-            qikinkSku: null, // missing required SKU
+            qikinkSku: null, // missing SKU
           },
         },
       ],
@@ -229,7 +221,43 @@ describe('QikinkService - Order Submission Hardening', () => {
     }
   });
 
-  it('7. Idempotency key generation and reuse on enqueue', async () => {
+  it('6. Unpaid prepaid order -> returns awaiting_payment and sets qikinkSyncStatus PENDING', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({
+      ...baseOrder,
+      paymentMethod: PaymentMethod.RAZORPAY,
+      paymentStatus: PaymentStatus.PENDING,
+    });
+
+    const res = await service.processSubmitJob('order_1');
+
+    expect(res).toEqual({ skipped: true, reason: 'awaiting_payment' });
+    expect(mockPrisma.order.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'order_1' },
+        data: expect.objectContaining({
+          qikinkSyncStatus: QikinkSyncStatus.PENDING,
+          qikinkLastError: 'Waiting for prepaid payment verification',
+        }),
+      }),
+    );
+  });
+
+  it('7. COD submission - allows COD orders to submit without prepaid check', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({
+      ...baseOrder,
+      paymentMethod: PaymentMethod.COD,
+      paymentStatus: PaymentStatus.PENDING,
+    });
+    mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
+    mockClient.createOrder.mockResolvedValue({ order_id: 'QIK_COD_123' });
+
+    const result = await service.processSubmitJob('order_1');
+
+    expect(result.success).toBe(true);
+    expect(result.qikinkOrderId).toBe('QIK_COD_123');
+  });
+
+  it('8. Idempotency key generation and reuse on enqueue', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       ...baseOrder,
       qikinkIdempotencyKey: 'existing_key_999',

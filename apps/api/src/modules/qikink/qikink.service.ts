@@ -136,12 +136,10 @@ export class QikinkService {
         where: { id: orderId },
         data: {
           qikinkSyncStatus: QikinkSyncStatus.PENDING,
-          qikinkLastError: 'Cannot submit unpaid prepaid order to Qikink',
+          qikinkLastError: 'Waiting for prepaid payment verification',
         },
       });
-      const err = new BadRequestException('Cannot submit unpaid prepaid order to Qikink');
-      (err as any).isPermanent = true;
-      throw err;
+      return { skipped: true, reason: 'awaiting_payment' };
     }
 
     if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) {
@@ -206,6 +204,13 @@ export class QikinkService {
       throw err;
     }
 
+    /**
+     * EXTERNAL SUBMISSION SAFETY LIMITATION DOCUMENTATION:
+     * Note: Qikink's public create-order API endpoint accepts order_number, line_items, shipping_address, total_order_value, and gateway.
+     * It does not accept a custom client idempotency_key parameter in the API body/header.
+     * We use `order.qikinkIdempotencyKey` locally for internal job queue deduplication and atomic worker locks to prevent double-submitting.
+     * If worker crashes after Qikink accepts the order but before saving qikinkOrderId locally, the retry will attempt submit with the same order_number.
+     */
     try {
       const response = await this.client.createOrder(payload, orderId);
       const qikinkOrderId = response.order_id != null ? String(response.order_id) : null;
@@ -275,7 +280,7 @@ export class QikinkService {
       await this.prisma.order.update({
         where: { id: orderId },
         data: {
-          qikinkSyncStatus: QikinkSyncStatus.FAILED,
+          qikinkSyncStatus: isPermanent ? QikinkSyncStatus.FAILED : QikinkSyncStatus.QUEUED,
           qikinkLastError: message.slice(0, 1000),
         },
       });
