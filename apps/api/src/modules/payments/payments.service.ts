@@ -30,8 +30,7 @@ export class PaymentsService {
   ) {
     this.keyId = this.config.get<string>('razorpay.keyId') || undefined;
     this.keySecret = this.config.get<string>('razorpay.keySecret') || undefined;
-    this.webhookSecret =
-      this.config.get<string>('razorpay.webhookSecret') || this.keySecret || undefined;
+    this.webhookSecret = this.config.get<string>('razorpay.webhookSecret') || undefined;
   }
 
   async createPaymentOrder(orderId: string, userId: string) {
@@ -165,10 +164,16 @@ export class PaymentsService {
       };
     }
 
-    // Verify razorpayOrderId matches internal order link or gatewayOrderId
+    const isProd = this.config.get<string>('NODE_ENV') === 'production';
+
+    // Require razorpayOrderId to be explicitly associated with internal order
     const expectedGatewayOrderId =
       order.paymentGatewayRef ||
-      order.payments.find((p) => p.gatewayOrderId === payload.razorpayOrderId)?.gatewayOrderId;
+      order.payments.find((p) => p.gatewayOrderId)?.gatewayOrderId;
+
+    if (!expectedGatewayOrderId && !payload.razorpayOrderId.startsWith('order_mock_')) {
+      throw new BadRequestException('Order has no associated Razorpay order ID');
+    }
 
     if (
       expectedGatewayOrderId &&
@@ -178,7 +183,8 @@ export class PaymentsService {
       throw new BadRequestException('Razorpay order ID mismatch for this order');
     }
 
-    if (this.keySecret) {
+    if (this.keyId && this.keySecret) {
+      // 1. Signature Verification
       const body = `${payload.razorpayOrderId}|${payload.razorpayPaymentId}`;
       const expected = createHmac('sha256', this.keySecret).update(body).digest('hex');
       try {
@@ -187,8 +193,45 @@ export class PaymentsService {
       } catch {
         throw new BadRequestException('Invalid payment signature');
       }
+
+      // 2. Trusted Server-Side Fetch & Validation from Razorpay API
+      try {
+        const auth = Buffer.from(`${this.keyId}:${this.keySecret}`).toString('base64');
+        const res = await fetch(`https://api.razorpay.com/v1/payments/${payload.razorpayPaymentId}`, {
+          headers: { Authorization: `Basic ${auth}` },
+        });
+        if (res.ok) {
+          const rzpPayment = (await res.json()) as {
+            order_id?: string;
+            amount?: number;
+            currency?: string;
+            status?: string;
+          };
+
+          if (rzpPayment.order_id && rzpPayment.order_id !== payload.razorpayOrderId) {
+            throw new BadRequestException(
+              `Razorpay payment ID ${payload.razorpayPaymentId} belongs to order ${rzpPayment.order_id}, not ${payload.razorpayOrderId}`,
+            );
+          }
+
+          const expectedAmount = Math.round(Number(order.total) * 100);
+          if (rzpPayment.amount != null && rzpPayment.amount !== expectedAmount) {
+            throw new BadRequestException(
+              `Payment amount mismatch: expected ${expectedAmount} paise, received ${rzpPayment.amount} paise`,
+            );
+          }
+
+          if (rzpPayment.currency && rzpPayment.currency.toUpperCase() !== 'INR') {
+            throw new BadRequestException(
+              `Payment currency mismatch: expected INR, received ${rzpPayment.currency}`,
+            );
+          }
+        }
+      } catch (err) {
+        if (err instanceof BadRequestException) throw err;
+        this.logger.warn(`Server-side fetch for payment ${payload.razorpayPaymentId} skipped: ${(err as Error).message}`);
+      }
     } else {
-      const isProd = this.config.get<string>('NODE_ENV') === 'production';
       if (isProd || !payload.razorpayOrderId.startsWith('order_mock_')) {
         throw new BadRequestException('Cannot verify payment without gateway secrets');
       }
@@ -298,6 +341,21 @@ export class PaymentsService {
     if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) {
       this.logger.warn(`Razorpay webhook ignored for cancelled/refunded order ${order.id}`);
       return { ok: true, ignored: true, reason: 'order_cancelled_or_refunded' };
+    }
+
+    // Webhook Amount & Currency Validation
+    const expectedAmountPaise = Math.round(Number(order.total) * 100);
+    const webhookAmount = paymentEntity?.amount != null ? Number(paymentEntity.amount) : undefined;
+    const webhookCurrency = paymentEntity?.currency != null ? String(paymentEntity.currency).toUpperCase() : undefined;
+
+    if (webhookAmount != null && webhookAmount !== expectedAmountPaise) {
+      this.logger.error(`Webhook amount mismatch for order ${order.id}: expected ${expectedAmountPaise}, got ${webhookAmount}`);
+      throw new BadRequestException(`Webhook payment amount mismatch: expected ${expectedAmountPaise}, got ${webhookAmount}`);
+    }
+
+    if (webhookCurrency != null && webhookCurrency !== 'INR') {
+      this.logger.error(`Webhook currency mismatch for order ${order.id}: expected INR, got ${webhookCurrency}`);
+      throw new BadRequestException(`Webhook payment currency mismatch: expected INR, got ${webhookCurrency}`);
     }
 
     if (order.paymentStatus !== PaymentStatus.PAID) {

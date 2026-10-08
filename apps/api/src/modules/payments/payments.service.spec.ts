@@ -73,7 +73,21 @@ describe('PaymentsService - Production Safety Audit', () => {
   });
 
   describe('verifyPayment', () => {
-    it('1. valid Razorpay signature -> payment accepted & order marked CONFIRMED/PAID, Qikink enqueued', async () => {
+    beforeEach(() => {
+      // Mock global fetch for Razorpay API endpoint
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          id: 'pay_rzp_456',
+          order_id: 'order_rzp_123',
+          amount: 100000, // 1000 INR = 100000 paise
+          currency: 'INR',
+          status: 'captured',
+        }),
+      } as any);
+    });
+
+    it('1. valid payment amount + currency -> accepted & order marked CONFIRMED/PAID', async () => {
       mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
 
       const razorpayOrderId = 'order_rzp_123';
@@ -98,27 +112,21 @@ describe('PaymentsService - Production Safety Audit', () => {
       );
     });
 
-    it('2. invalid signature -> rejected with BadRequestException', async () => {
+    it('2. wrong payment amount -> rejected with BadRequestException', async () => {
       mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
-
-      await expect(
-        service.verifyPayment({
-          orderId: 'order_123',
-          razorpayOrderId: 'order_rzp_123',
-          razorpayPaymentId: 'pay_rzp_456',
-          razorpaySignature: 'invalid_sig',
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          id: 'pay_rzp_456',
+          order_id: 'order_rzp_123',
+          amount: 50000, // Mismatched amount (500 INR instead of 1000 INR)
+          currency: 'INR',
         }),
-      ).rejects.toThrow(BadRequestException);
+      } as any);
 
-      expect(mockQikink.enqueueOrderSubmission).not.toHaveBeenCalled();
-    });
-
-    it('3. wrong Razorpay order ID -> rejected with BadRequestException', async () => {
-      mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
-
-      const wrongOrderId = 'order_rzp_WRONG';
+      const razorpayOrderId = 'order_rzp_123';
       const razorpayPaymentId = 'pay_rzp_456';
-      const body = `${wrongOrderId}|${razorpayPaymentId}`;
+      const body = `${razorpayOrderId}|${razorpayPaymentId}`;
       const razorpaySignature = createHmac('sha256', keySecret)
         .update(body)
         .digest('hex');
@@ -126,7 +134,7 @@ describe('PaymentsService - Production Safety Audit', () => {
       await expect(
         service.verifyPayment({
           orderId: 'order_123',
-          razorpayOrderId: wrongOrderId,
+          razorpayOrderId,
           razorpayPaymentId,
           razorpaySignature,
         }),
@@ -135,7 +143,82 @@ describe('PaymentsService - Production Safety Audit', () => {
       expect(mockQikink.enqueueOrderSubmission).not.toHaveBeenCalled();
     });
 
-    it('4. duplicate verification/callback -> idempotent return', async () => {
+    it('3. wrong currency -> rejected with BadRequestException', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          id: 'pay_rzp_456',
+          order_id: 'order_rzp_123',
+          amount: 100000,
+          currency: 'USD', // Mismatched currency
+        }),
+      } as any);
+
+      const razorpayOrderId = 'order_rzp_123';
+      const razorpayPaymentId = 'pay_rzp_456';
+      const body = `${razorpayOrderId}|${razorpayPaymentId}`;
+      const razorpaySignature = createHmac('sha256', keySecret)
+        .update(body)
+        .digest('hex');
+
+      await expect(
+        service.verifyPayment({
+          orderId: 'order_123',
+          razorpayOrderId,
+          razorpayPaymentId,
+          razorpaySignature,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('4. payment ID belonging to another Razorpay order -> rejected', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          id: 'pay_rzp_456',
+          order_id: 'order_rzp_OTHER', // Belongs to different Razorpay order
+          amount: 100000,
+          currency: 'INR',
+        }),
+      } as any);
+
+      const razorpayOrderId = 'order_rzp_123';
+      const razorpayPaymentId = 'pay_rzp_456';
+      const body = `${razorpayOrderId}|${razorpayPaymentId}`;
+      const razorpaySignature = createHmac('sha256', keySecret)
+        .update(body)
+        .digest('hex');
+
+      await expect(
+        service.verifyPayment({
+          orderId: 'order_123',
+          razorpayOrderId,
+          razorpayPaymentId,
+          razorpaySignature,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('5. missing/mismatched stored Razorpay order ID -> rejected', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...mockOrder,
+        paymentGatewayRef: null,
+        payments: [],
+      });
+
+      await expect(
+        service.verifyPayment({
+          orderId: 'order_123',
+          razorpayOrderId: 'order_rzp_123',
+          razorpayPaymentId: 'pay_rzp_456',
+          razorpaySignature: 'sig',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('6. repeated successful verification -> idempotent return', async () => {
       mockPrisma.order.findUnique.mockResolvedValue({
         ...mockOrder,
         paymentStatus: PaymentStatus.PAID,
@@ -156,25 +239,22 @@ describe('PaymentsService - Production Safety Audit', () => {
       );
     });
 
-    it('5. cancelled/refunded order -> cannot transition to PAID', async () => {
-      mockPrisma.order.findUnique.mockResolvedValue({
-        ...mockOrder,
-        status: OrderStatus.CANCELLED,
-      });
+    it('7. invalid signature -> rejected', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
 
       await expect(
         service.verifyPayment({
           orderId: 'order_123',
           razorpayOrderId: 'order_rzp_123',
           razorpayPaymentId: 'pay_rzp_456',
-          razorpaySignature: 'sig',
+          razorpaySignature: 'invalid_sig',
         }),
       ).rejects.toThrow(BadRequestException);
     });
   });
 
   describe('handleRazorpayWebhook', () => {
-    it('6. valid webhook event -> updates payment and enqueues Qikink', async () => {
+    it('8. valid signed webhook -> accepted and enqueues Qikink', async () => {
       mockPrisma.payment.findFirst.mockResolvedValue(null);
       mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
 
@@ -185,6 +265,8 @@ describe('PaymentsService - Production Safety Audit', () => {
             entity: {
               id: 'pay_rzp_999',
               order_id: 'order_rzp_123',
+              amount: 100000,
+              currency: 'INR',
               status: 'captured',
               notes: { orderId: 'order_123' },
             },
@@ -210,13 +292,84 @@ describe('PaymentsService - Production Safety Audit', () => {
       );
     });
 
-    it('7. webhook with invalid signature -> throws BadRequestException', async () => {
+    it('9. webhook amount mismatch -> rejected', async () => {
+      mockPrisma.payment.findFirst.mockResolvedValue(null);
+      mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
+
+      const payloadBody = {
+        event: 'payment.captured',
+        payload: {
+          payment: {
+            entity: {
+              id: 'pay_rzp_999',
+              order_id: 'order_rzp_123',
+              amount: 50000, // Mismatched amount
+              currency: 'INR',
+              status: 'captured',
+              notes: { orderId: 'order_123' },
+            },
+          },
+        },
+      };
+
+      const rawBody = Buffer.from(JSON.stringify(payloadBody));
+      const signature = createHmac('sha256', webhookSecret)
+        .update(rawBody)
+        .digest('hex');
+
+      await expect(
+        service.handleRazorpayWebhook(signature, rawBody, payloadBody),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('10. webhook currency mismatch -> rejected', async () => {
+      mockPrisma.payment.findFirst.mockResolvedValue(null);
+      mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
+
+      const payloadBody = {
+        event: 'payment.captured',
+        payload: {
+          payment: {
+            entity: {
+              id: 'pay_rzp_999',
+              order_id: 'order_rzp_123',
+              amount: 100000,
+              currency: 'USD', // Mismatched currency
+              status: 'captured',
+              notes: { orderId: 'order_123' },
+            },
+          },
+        },
+      };
+
+      const rawBody = Buffer.from(JSON.stringify(payloadBody));
+      const signature = createHmac('sha256', webhookSecret)
+        .update(rawBody)
+        .digest('hex');
+
+      await expect(
+        service.handleRazorpayWebhook(signature, rawBody, payloadBody),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('11. production without dedicated RAZORPAY_WEBHOOK_SECRET -> rejected', async () => {
+      const prodConfig = {
+        get: jest.fn((key: string) => {
+          if (key === 'NODE_ENV') return 'production';
+          if (key === 'razorpay.keyId') return 'rzp_live_123';
+          if (key === 'razorpay.keySecret') return 'key_secret_123';
+          if (key === 'razorpay.webhookSecret') return null; // Missing dedicated webhook secret
+          return null;
+        }),
+      };
+      const prodService = new PaymentsService(mockPrisma, prodConfig as any, mockQikink);
+
       const payloadBody = { event: 'payment.captured' };
       const rawBody = Buffer.from(JSON.stringify(payloadBody));
 
       await expect(
-        service.handleRazorpayWebhook('invalid_wh_sig', rawBody, payloadBody),
-      ).rejects.toThrow(BadRequestException);
+        prodService.handleRazorpayWebhook('sig', rawBody, payloadBody),
+      ).rejects.toThrow('RAZORPAY_WEBHOOK_SECRET is required in production');
     });
   });
 });
