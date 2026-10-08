@@ -47,16 +47,35 @@ export class PaymentsService {
       return { message: 'Already paid', orderId: order.id, orderNumber: order.orderNumber };
     }
 
+    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) {
+      throw new BadRequestException('Cannot initiate payment for cancelled or refunded order');
+    }
+
     const amountPaise = Math.round(Number(order.total) * 100);
     const payment = order.payments[0];
 
     if (!this.keyId || !this.keySecret) {
+      const isProd = this.config.get<string>('NODE_ENV') === 'production';
+      if (isProd) {
+        throw new BadRequestException('Razorpay keys not configured in production environment');
+      }
       this.logger.warn('Razorpay keys missing — returning mock payment order');
       const mockId = `order_mock_${order.orderNumber}`;
       if (payment) {
         await this.prisma.payment.update({
           where: { id: payment.id },
           data: { gatewayOrderId: mockId, gateway: 'razorpay-mock' },
+        });
+      } else {
+        await this.prisma.payment.create({
+          data: {
+            orderId: order.id,
+            amount: order.total,
+            method: PaymentMethod.RAZORPAY,
+            status: PaymentStatus.PENDING,
+            gatewayOrderId: mockId,
+            gateway: 'razorpay-mock',
+          },
         });
       }
       return {
@@ -94,6 +113,17 @@ export class PaymentsService {
         where: { id: payment.id },
         data: { gatewayOrderId: rzp.id, gateway: 'razorpay' },
       });
+    } else {
+      await this.prisma.payment.create({
+        data: {
+          orderId: order.id,
+          amount: order.total,
+          method: PaymentMethod.RAZORPAY,
+          status: PaymentStatus.PENDING,
+          gatewayOrderId: rzp.id,
+          gateway: 'razorpay',
+        },
+      });
     }
     return {
       razorpayOrderId: rzp.id,
@@ -121,6 +151,10 @@ export class PaymentsService {
     });
     if (!order) throw new BadRequestException('Order not found');
 
+    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) {
+      throw new BadRequestException('Cannot verify payment for cancelled or refunded order');
+    }
+
     if (order.paymentStatus === PaymentStatus.PAID) {
       await this.qikink.enqueueOrderSubmission(order.id, 'already_paid_verify').catch(() => undefined);
       return {
@@ -131,14 +165,33 @@ export class PaymentsService {
       };
     }
 
+    // Verify razorpayOrderId matches internal order link or gatewayOrderId
+    const expectedGatewayOrderId =
+      order.paymentGatewayRef ||
+      order.payments.find((p) => p.gatewayOrderId === payload.razorpayOrderId)?.gatewayOrderId;
+
+    if (
+      expectedGatewayOrderId &&
+      expectedGatewayOrderId !== payload.razorpayOrderId &&
+      !payload.razorpayOrderId.startsWith('order_mock_')
+    ) {
+      throw new BadRequestException('Razorpay order ID mismatch for this order');
+    }
+
     if (this.keySecret) {
       const body = `${payload.razorpayOrderId}|${payload.razorpayPaymentId}`;
       const expected = createHmac('sha256', this.keySecret).update(body).digest('hex');
-      if (expected !== payload.razorpaySignature) {
+      try {
+        const ok = timingSafeEqual(Buffer.from(expected), Buffer.from(payload.razorpaySignature));
+        if (!ok) throw new Error('mismatch');
+      } catch {
         throw new BadRequestException('Invalid payment signature');
       }
-    } else if (!payload.razorpayOrderId.startsWith('order_mock_')) {
-      throw new BadRequestException('Cannot verify payment without gateway secrets');
+    } else {
+      const isProd = this.config.get<string>('NODE_ENV') === 'production';
+      if (isProd || !payload.razorpayOrderId.startsWith('order_mock_')) {
+        throw new BadRequestException('Cannot verify payment without gateway secrets');
+      }
     }
 
     await this.markOrderPaid(order.id, {
@@ -162,6 +215,7 @@ export class PaymentsService {
     rawBody: Buffer | string | undefined,
     body: Record<string, unknown>,
   ) {
+    const isProd = this.config.get<string>('NODE_ENV') === 'production';
     if (this.webhookSecret) {
       if (!signature || !rawBody) {
         throw new BadRequestException('Missing Razorpay signature');
@@ -174,6 +228,8 @@ export class PaymentsService {
       } catch {
         throw new BadRequestException('Invalid Razorpay webhook signature');
       }
+    } else if (isProd) {
+      throw new BadRequestException('RAZORPAY_WEBHOOK_SECRET is required in production');
     } else {
       this.logger.warn('RAZORPAY_WEBHOOK_SECRET not set — accepting webhook without verify (dev only)');
     }
@@ -237,6 +293,11 @@ export class PaymentsService {
     ];
     if (!successEvents.includes(event) && paymentEntity?.status !== 'captured') {
       return { ok: true, ignored: true, event };
+    }
+
+    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) {
+      this.logger.warn(`Razorpay webhook ignored for cancelled/refunded order ${order.id}`);
+      return { ok: true, ignored: true, reason: 'order_cancelled_or_refunded' };
     }
 
     if (order.paymentStatus !== PaymentStatus.PAID) {
