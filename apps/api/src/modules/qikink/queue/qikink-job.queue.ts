@@ -25,9 +25,9 @@ export class QikinkJobQueue {
       runAfter?: Date;
       maxAttempts?: number;
     } = {},
+    existingTx?: Prisma.TransactionClient,
   ) {
-    return this.prisma.$transaction(async (tx) => {
-      // Idempotent enqueue for submit jobs on same order while pending/processing
+    const runInTx = async (tx: Prisma.TransactionClient) => {
       if (opts.orderId && type === QikinkJobType.SUBMIT_ORDER) {
         const existing = await tx.qikinkJob.findFirst({
           where: {
@@ -49,7 +49,13 @@ export class QikinkJobQueue {
           status: QikinkJobStatus.PENDING,
         },
       });
-    });
+    };
+
+    if (existingTx) {
+      return runInTx(existingTx);
+    }
+
+    return this.prisma.$transaction(runInTx);
   }
 
   async claimNext(types?: QikinkJobType[]) {

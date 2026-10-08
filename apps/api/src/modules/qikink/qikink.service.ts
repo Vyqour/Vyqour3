@@ -101,19 +101,25 @@ export class QikinkService {
       order.qikinkIdempotencyKey ||
       createHash('sha256').update(`${order.id}:${order.orderNumber}:qikink`).digest('hex').slice(0, 32);
 
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        qikinkSyncStatus: QikinkSyncStatus.QUEUED,
-        qikinkIdempotencyKey: idempotencyKey,
-        qikinkOrderNumber: toQikinkOrderNumber(order),
-        qikinkLastError: null,
-      },
-    });
+    const job = await this.prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: orderId },
+        data: {
+          qikinkSyncStatus: QikinkSyncStatus.QUEUED,
+          qikinkIdempotencyKey: idempotencyKey,
+          qikinkOrderNumber: toQikinkOrderNumber(order),
+          qikinkLastError: null,
+        },
+      });
 
-    const job = await this.queue.enqueue(QikinkJobType.SUBMIT_ORDER, {
-      orderId,
-      payload: { reason, idempotencyKey },
+      return this.queue.enqueue(
+        QikinkJobType.SUBMIT_ORDER,
+        {
+          orderId,
+          payload: { reason, idempotencyKey },
+        },
+        tx,
+      );
     });
 
     this.logger.log(`Queued Qikink submit job=${job.id} order=${order.orderNumber} reason=${reason}`);

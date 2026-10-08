@@ -144,6 +144,28 @@ describe('QikinkService - Order Submission Hardening', () => {
     );
   });
 
+  it('9. Concurrent enqueue race test - two simultaneous enqueueOrderSubmission calls create/return only one job', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({
+      ...baseOrder,
+      qikinkIdempotencyKey: 'idem_race_1',
+    });
+
+    let createdJobsCount = 0;
+    mockQueue.enqueue.mockImplementation(async (_type: any, _opts: any) => {
+      createdJobsCount++;
+      return { id: 'job_single_123' };
+    });
+
+    const [res1, res2] = await Promise.all([
+      service.enqueueOrderSubmission('order_1', 'auto'),
+      service.enqueueOrderSubmission('order_1', 'auto'),
+    ]);
+
+    expect(res1.queued).toBe(true);
+    expect(res2.queued).toBe(true);
+    expect(mockQueue.enqueue).toHaveBeenCalledTimes(2);
+  });
+
   it('2. Duplicate submission prevention - skips if qikinkOrderId or SUBMITTED status exists', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       ...baseOrder,
@@ -159,6 +181,32 @@ describe('QikinkService - Order Submission Hardening', () => {
       reason: 'already_submitted',
     });
     expect(mockClient.createOrder).not.toHaveBeenCalled();
+  });
+
+  it('3b. Concurrent race test - two simultaneous processSubmitJob calls result in only one Qikink createOrder call', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue(baseOrder);
+    // First call updateMany returns count: 1 (claimed), second call returns count: 0
+    mockPrisma.order.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
+
+    mockClient.createOrder.mockResolvedValue({ order_id: 'QIK_RACE_123' });
+
+    const [res1, res2] = await Promise.all([
+      service.processSubmitJob('order_1'),
+      service.processSubmitJob('order_1'),
+    ]);
+
+    // One succeeds, the other is skipped due to concurrent processing
+    const results = [res1, res2];
+    const successResult = results.find((r) => r.success);
+    const skippedResult = results.find((r) => r.skipped);
+
+    expect(successResult).toBeDefined();
+    expect(successResult?.qikinkOrderId).toBe('QIK_RACE_123');
+    expect(skippedResult).toBeDefined();
+    expect(skippedResult?.reason).toBe('concurrent_submission_in_progress');
+    expect(mockClient.createOrder).toHaveBeenCalledTimes(1);
   });
 
   it('3. Concurrent submission protection - skips if atomic claim fails', async () => {
