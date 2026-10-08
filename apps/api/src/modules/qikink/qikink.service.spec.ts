@@ -144,17 +144,13 @@ describe('QikinkService - Order Submission Hardening', () => {
     );
   });
 
-  it('9. Concurrent enqueue race test - two simultaneous enqueueOrderSubmission calls create/return only one job', async () => {
+  it('9. Concurrent enqueue race test - two simultaneous enqueueOrderSubmission calls delegate to transactional queue enqueue', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       ...baseOrder,
       qikinkIdempotencyKey: 'idem_race_1',
     });
 
-    let createdJobsCount = 0;
-    mockQueue.enqueue.mockImplementation(async (_type: any, _opts: any) => {
-      createdJobsCount++;
-      return { id: 'job_single_123' };
-    });
+    mockQueue.enqueue.mockResolvedValue({ id: 'job_single_123' });
 
     const [res1, res2] = await Promise.all([
       service.enqueueOrderSubmission('order_1', 'auto'),
@@ -164,6 +160,24 @@ describe('QikinkService - Order Submission Hardening', () => {
     expect(res1.queued).toBe(true);
     expect(res2.queued).toBe(true);
     expect(mockQueue.enqueue).toHaveBeenCalledTimes(2);
+  });
+
+  it('10. Max-attempt limit test - queue fail marks job DEAD when attempts >= maxAttempts', async () => {
+    const { QikinkJobQueue } = jest.requireActual('./queue/qikink-job.queue');
+    const queue = new QikinkJobQueue(mockPrisma, mockConfig);
+    mockPrisma.qikinkJob = { update: jest.fn().mockResolvedValue({ status: QikinkJobStatus.DEAD }) };
+
+    await queue.fail('job_1', 'Transient error', 8, 8, false);
+
+    expect(mockPrisma.qikinkJob.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job_1' },
+        data: expect.objectContaining({
+          status: QikinkJobStatus.DEAD,
+          error: 'Transient error',
+        }),
+      }),
+    );
   });
 
   it('2. Duplicate submission prevention - skips if qikinkOrderId or SUBMITTED status exists', async () => {
