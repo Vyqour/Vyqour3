@@ -127,12 +127,21 @@ export class QikinkService {
     });
     if (!order) throw new NotFoundException('Order not found');
 
-    if (order.qikinkOrderId) {
-      return { skipped: true, qikinkOrderId: order.qikinkOrderId };
+    if (order.qikinkOrderId || order.qikinkSyncStatus === QikinkSyncStatus.SUBMITTED) {
+      return { skipped: true, qikinkOrderId: order.qikinkOrderId, reason: 'already_submitted' };
     }
 
     if (order.paymentMethod !== PaymentMethod.COD && order.paymentStatus !== PaymentStatus.PAID) {
-      throw new BadRequestException('Cannot submit unpaid prepaid order to Qikink');
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: {
+          qikinkSyncStatus: QikinkSyncStatus.PENDING,
+          qikinkLastError: 'Cannot submit unpaid prepaid order to Qikink',
+        },
+      });
+      const err = new BadRequestException('Cannot submit unpaid prepaid order to Qikink');
+      (err as any).isPermanent = true;
+      throw err;
     }
 
     if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) {
@@ -143,32 +152,69 @@ export class QikinkService {
       return { skipped: true, reason: 'cancelled' };
     }
 
-    const shipping = this.config.get<string>('qikink.shipping') || '1';
-    const payload = mapOrderToQikinkPayload(order, { shipping });
-
-    await this.prisma.order.update({
-      where: { id: orderId },
+    // Atomic claim to prevent concurrent submissions for the same order
+    const claimResult = await this.prisma.order.updateMany({
+      where: {
+        id: orderId,
+        qikinkOrderId: null,
+        qikinkSyncStatus: { notIn: [QikinkSyncStatus.SUBMITTING, QikinkSyncStatus.SUBMITTED] },
+      },
       data: {
         qikinkSyncStatus: QikinkSyncStatus.SUBMITTING,
-        qikinkPayload: payload as object,
         qikinkAttempts: { increment: 1 },
-        qikinkOrderNumber: String(payload.order_number),
       },
     });
 
-    // Double-check race: another worker may have submitted
-    const fresh = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (fresh?.qikinkOrderId) {
-      return { skipped: true, qikinkOrderId: fresh.qikinkOrderId };
+    if (!claimResult.count) {
+      const fresh = await this.prisma.order.findUnique({ where: { id: orderId } });
+      if (fresh?.qikinkOrderId || fresh?.qikinkSyncStatus === QikinkSyncStatus.SUBMITTED) {
+        return { skipped: true, qikinkOrderId: fresh.qikinkOrderId, reason: 'already_submitted' };
+      }
+      return { skipped: true, reason: 'concurrent_submission_in_progress' };
+    }
+
+    let payload: ReturnType<typeof mapOrderToQikinkPayload>;
+    try {
+      const shipping = this.config.get<string>('qikink.shipping') || '1';
+      payload = mapOrderToQikinkPayload(order, { shipping });
+
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: {
+          qikinkPayload: payload as object,
+          qikinkOrderNumber: String(payload.order_number),
+        },
+      });
+    } catch (err) {
+      const message = (err as Error).message;
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: {
+          qikinkSyncStatus: QikinkSyncStatus.FAILED,
+          qikinkLastError: message.slice(0, 1000),
+        },
+      });
+      await this.prisma.auditLog.create({
+        data: {
+          action: 'QIKINK_ORDER_SUBMIT_FAILED',
+          entity: 'Order',
+          entityId: orderId,
+          metadata: { error: message.slice(0, 500), permanent: true },
+        },
+      });
+      (err as any).isPermanent = true;
+      throw err;
     }
 
     try {
       const response = await this.client.createOrder(payload, orderId);
       const qikinkOrderId = response.order_id != null ? String(response.order_id) : null;
       if (!qikinkOrderId) {
-        throw new Error(
+        const err = new Error(
           `Qikink create order succeeded without order_id: ${JSON.stringify(response)}`,
         );
+        (err as any).isPermanent = true;
+        throw err;
       }
 
       await this.prisma.$transaction([
@@ -219,6 +265,13 @@ export class QikinkService {
       return { success: true, qikinkOrderId, response };
     } catch (err) {
       const message = (err as Error).message;
+      const isPermanent =
+        err instanceof BadRequestException ||
+        (err as any).isPermanent === true ||
+        (err as any).status === 400 ||
+        (err as any).statusCode === 400 ||
+        /(validation|invalid|missing|unauthorized|forbidden)/i.test(message);
+
       await this.prisma.order.update({
         where: { id: orderId },
         data: {
@@ -231,9 +284,12 @@ export class QikinkService {
           action: 'QIKINK_ORDER_SUBMIT_FAILED',
           entity: 'Order',
           entityId: orderId,
-          metadata: { error: message.slice(0, 500) },
+          metadata: { error: message.slice(0, 500), permanent: isPermanent },
         },
       });
+      if (isPermanent) {
+        (err as any).isPermanent = true;
+      }
       throw err;
     }
   }

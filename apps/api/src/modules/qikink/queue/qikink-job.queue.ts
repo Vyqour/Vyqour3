@@ -90,9 +90,15 @@ export class QikinkJobQueue {
     });
   }
 
-  async fail(jobId: string, error: string, attempts: number, maxAttempts: number) {
+  async fail(
+    jobId: string,
+    error: string,
+    attempts: number,
+    maxAttempts: number,
+    isPermanent = false,
+  ) {
     const delayMs = Math.min(60 * 60 * 1000, 2 ** Math.min(attempts, 8) * 15_000);
-    const dead = attempts >= maxAttempts;
+    const dead = isPermanent || attempts >= maxAttempts;
     return this.prisma.qikinkJob.update({
       where: { id: jobId },
       data: {
