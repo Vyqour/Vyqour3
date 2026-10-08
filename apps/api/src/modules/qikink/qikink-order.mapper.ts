@@ -16,7 +16,7 @@ import {
 
 type OrderForQikink = Order & {
   items: (OrderItem & {
-    product: Product;
+    product: Product & { category?: { slug?: string; name?: string } };
     variant: ProductVariant | null;
   })[];
   shippingAddress: Address;
@@ -97,25 +97,53 @@ export function mapOrderToQikinkPayload(
       }
 
       line.print_type_id = product.qikinkPrintTypeId || 1;
+
+      const catSlug = product.category?.slug?.toLowerCase() || '';
+      const catName = product.category?.name?.toLowerCase() || '';
+      const isAccessoryOrAop =
+        catSlug.includes('accessory') ||
+        catSlug.includes('accessories') ||
+        catSlug.includes('aop') ||
+        catName.includes('accessory') ||
+        catName.includes('accessories') ||
+        catName.includes('all over print');
+
       line.designs = validDesigns.map((d) => {
-        const designCode = (d.designCode?.trim() || product.slug).trim();
-        if (designCode.length > 15) {
-          throw new BadRequestException(
-            `Qikink design_code for product "${item.productName}" exceeds the maximum length of 15 characters ("${designCode}"). Please update designCode in the product editor.`,
-          );
+        let designCode = d.designCode?.trim();
+        if (designCode) {
+          if (designCode.length > 15) {
+            throw new BadRequestException(
+              `Qikink design_code for product "${item.productName}" exceeds maximum 15 characters ("${designCode}").`,
+            );
+          }
+        } else {
+          designCode = product.slug.slice(0, 15);
         }
 
-        const placementSku = (d.placementSku || d.placement || 'fr').trim();
+        const placementSku = (d.placementSku || d.placement)?.trim();
         if (!placementSku) {
           throw new BadRequestException(
             `Missing placement_sku for design in product "${item.productName}".`,
           );
         }
 
+        if (!isAccessoryOrAop) {
+          if (d.widthInches == null || Number(d.widthInches) <= 0) {
+            throw new BadRequestException(
+              `Width (inches) is required and must be > 0 for design placement in product "${item.productName}".`,
+            );
+          }
+          if (d.heightInches == null || Number(d.heightInches) <= 0) {
+            throw new BadRequestException(
+              `Height (inches) is required and must be > 0 for design placement in product "${item.productName}".`,
+            );
+          }
+        }
+
         return {
           design_code: designCode,
-          width_inches: d.widthInches != null ? String(d.widthInches) : '',
-          height_inches: d.heightInches != null ? String(d.heightInches) : '',
+          width_inches: d.widthInches != null && Number(d.widthInches) > 0 ? String(d.widthInches) : '',
+          height_inches: d.heightInches != null && Number(d.heightInches) > 0 ? String(d.heightInches) : '',
           placement_sku: placementSku,
           design_link: d.designUrl!.trim(),
           mockup_link: (d.mockupUrl || d.designUrl!).trim(),
