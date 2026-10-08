@@ -79,30 +79,49 @@ export function mapOrderToQikinkPayload(
       const rawDesigns = Array.isArray(product.qikinkDesigns)
         ? (product.qikinkDesigns as unknown as Array<{
             placement?: string;
+            placementSku?: string;
             designCode?: string;
+            widthInches?: number;
+            heightInches?: number;
             designUrl?: string;
             mockupUrl?: string;
           }>)
         : [];
 
-      const validDesigns = rawDesigns.filter((d) => d && d.designUrl);
+      const validDesigns = rawDesigns.filter((d) => d && d.designUrl?.trim());
 
       if (!validDesigns.length) {
         throw new BadRequestException(
-          `No print-ready design uploaded for "${item.productName}". Add at least one placement (front/back) in the product's Qikink settings.`,
+          `No print-ready design uploaded for "${item.productName}". Add at least one placement in the product's Qikink settings.`,
         );
       }
 
       line.print_type_id = product.qikinkPrintTypeId || 1;
-      line.designs = validDesigns.map((d) => ({
-        design_code: d.designCode || product.slug.slice(0, 20),
-        width_inches: '',
-        height_inches: '',
-        placement_sku: d.placement || 'fr',
-        design_link: d.designUrl!,
-        mockup_link: d.mockupUrl || d.designUrl!,
-      }));
-                                                       }
+      line.designs = validDesigns.map((d) => {
+        const designCode = (d.designCode?.trim() || product.slug).trim();
+        if (designCode.length > 15) {
+          throw new BadRequestException(
+            `Qikink design_code for product "${item.productName}" exceeds the maximum length of 15 characters ("${designCode}"). Please update designCode in the product editor.`,
+          );
+        }
+
+        const placementSku = (d.placementSku || d.placement || 'fr').trim();
+        if (!placementSku) {
+          throw new BadRequestException(
+            `Missing placement_sku for design in product "${item.productName}".`,
+          );
+        }
+
+        return {
+          design_code: designCode,
+          width_inches: d.widthInches != null ? String(d.widthInches) : '',
+          height_inches: d.heightInches != null ? String(d.heightInches) : '',
+          placement_sku: placementSku,
+          design_link: d.designUrl!.trim(),
+          mockup_link: (d.mockupUrl || d.designUrl!).trim(),
+        };
+      });
+    }
     return line;
   });
 

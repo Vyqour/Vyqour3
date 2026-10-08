@@ -2,9 +2,12 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsNumber,
   IsObject,
   IsOptional,
   IsString,
+  MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 
@@ -60,7 +63,22 @@ export class QikinkDesignEntryDto {
 
   @IsOptional()
   @IsString()
+  placementSku?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(15)
   designCode?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  widthInches?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  heightInches?: number;
 
   @IsString()
   designUrl!: string;
