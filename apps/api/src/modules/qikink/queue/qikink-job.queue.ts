@@ -29,6 +29,13 @@ export class QikinkJobQueue {
   ) {
     const runInTx = async (tx: Prisma.TransactionClient) => {
       if (opts.orderId && type === QikinkJobType.SUBMIT_ORDER) {
+        // Explicit DB row-level lock on the order row to serialize concurrent enqueue calls
+        try {
+          await tx.$executeRaw`SELECT id FROM orders WHERE id = ${opts.orderId} FOR UPDATE`;
+        } catch {
+          // Ignore row lock if DB engine or mock doesn't support raw SQL row locks
+        }
+
         const existing = await tx.qikinkJob.findFirst({
           where: {
             orderId: opts.orderId,

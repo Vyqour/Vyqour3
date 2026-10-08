@@ -144,22 +144,43 @@ describe('QikinkService - Order Submission Hardening', () => {
     );
   });
 
-  it('9. Concurrent enqueue race test - two simultaneous enqueueOrderSubmission calls delegate to transactional queue enqueue', async () => {
-    mockPrisma.order.findUnique.mockResolvedValue({
-      ...baseOrder,
-      qikinkIdempotencyKey: 'idem_race_1',
-    });
+  it('9. Concurrent enqueue race test - verifies queue returns same active SUBMIT_ORDER job under concurrent calls', async () => {
+    const { QikinkJobQueue } = jest.requireActual('./queue/qikink-job.queue');
 
-    mockQueue.enqueue.mockResolvedValue({ id: 'job_single_123' });
+    let activeJobInDb: any = null;
 
-    const [res1, res2] = await Promise.all([
-      service.enqueueOrderSubmission('order_1', 'auto'),
-      service.enqueueOrderSubmission('order_1', 'auto'),
+    const mockTxPrisma = {
+      $executeRaw: jest.fn().mockImplementation(async () => {
+        // Simulates DB row-level lock delay
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return 1;
+      }),
+      qikinkJob: {
+        findFirst: jest.fn().mockImplementation(async () => {
+          return activeJobInDb;
+        }),
+        create: jest.fn().mockImplementation(async () => {
+          activeJobInDb = { id: 'job_active_123', type: QikinkJobType.SUBMIT_ORDER, orderId: 'order_1', status: QikinkJobStatus.PENDING };
+          return activeJobInDb;
+        }),
+      },
+    };
+
+    const txPrismaService = {
+      $transaction: jest.fn(async (cb: any) => cb(mockTxPrisma)),
+    };
+
+    const realQueue = new QikinkJobQueue(txPrismaService as any, mockConfig);
+
+    const [j1, j2] = await Promise.all([
+      realQueue.enqueue(QikinkJobType.SUBMIT_ORDER, { orderId: 'order_1' }),
+      realQueue.enqueue(QikinkJobType.SUBMIT_ORDER, { orderId: 'order_1' }),
     ]);
 
-    expect(res1.queued).toBe(true);
-    expect(res2.queued).toBe(true);
-    expect(mockQueue.enqueue).toHaveBeenCalledTimes(2);
+    expect(j1.id).toBe('job_active_123');
+    expect(j2.id).toBe('job_active_123');
+    expect(mockTxPrisma.qikinkJob.create).toHaveBeenCalledTimes(1);
+    expect(mockTxPrisma.$executeRaw).toHaveBeenCalledTimes(2);
   });
 
   it('10. Max-attempt limit test - queue fail marks job DEAD when attempts >= maxAttempts', async () => {
