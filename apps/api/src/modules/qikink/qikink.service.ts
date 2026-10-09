@@ -477,8 +477,8 @@ export class QikinkService {
       // Secret configured but signature missing
       throw new BadRequestException('Missing Qikink webhook signature');
     } else {
-      // Dev mode without secret
-      signatureValid = true;
+      // Secret not configured — unauthenticated webhook
+      signatureValid = false;
     }
 
     const eventType = String(
@@ -542,6 +542,23 @@ export class QikinkService {
       return { ok: true, matched: false };
     }
 
+    // CRITICAL SAFETY GUARD: Prevent unauthenticated webhook events from altering order status directly.
+    // If HMAC signature was not verified (e.g. no secret configured or unconfirmed signature), enqueue
+    // an authenticated status sync job instead of applying status update directly.
+    if (!signatureValid) {
+      await this.prisma.qikinkWebhookEvent.update({
+        where: { id: event.id },
+        data: {
+          processed: true,
+          processedAt: new Date(),
+          orderId: order.id,
+          error: 'Unauthenticated webhook event: status sync enqueued for verification',
+        },
+      });
+      await this.queue.enqueue(QikinkJobType.SYNC_ORDER_STATUS, { orderId: order.id });
+      return { ok: true, matched: true, orderId: order.id, verified: false, queuedSync: true };
+    }
+
     try {
       const status = String(body.status || body.order_status || body.fulfillment_status || eventType);
       const awb = (body.awb || body.tracking_number || body.trackingNumber) as string | undefined;
@@ -557,7 +574,7 @@ export class QikinkService {
         where: { id: event.id },
         data: { processed: true, processedAt: new Date(), orderId: order.id },
       });
-      return { ok: true, matched: true, orderId: order.id };
+      return { ok: true, matched: true, orderId: order.id, verified: true };
     } catch (err) {
       await this.prisma.qikinkWebhookEvent.update({
         where: { id: event.id },
