@@ -29,7 +29,10 @@ type Collection = { id: string; name: string; slug: string };
 
 type QikinkDesignEntry = {
   placement: string;
+  placementSku?: string;
   designCode: string;
+  widthInches?: number;
+  heightInches?: number;
   designUrl: string;
   mockupUrl?: string;
 };
@@ -50,6 +53,7 @@ type ProductImage = {
 
 type ProductVariant = {
   sku: string;
+  qikinkSku?: string;
   size?: string;
   color?: string;
   colorHex?: string;
@@ -116,7 +120,7 @@ type DraftForm = {
   qikinkPrintTypeId: string;
   qikinkSearchFromMyProducts: '0' | '1';
   qikinkDesigns: QikinkDesignEntry[];
-  /** variants as simple lines: SKU | size | color | stock | price */
+  /** variants as simple lines: SKU | Qikink SKU | size | color | stock | price */
   variantsText: string;
   expanded: boolean;
   saving: boolean;
@@ -152,7 +156,7 @@ function makeTemplate(categoryId = '', collectionId = ''): DraftForm {
   const variants = SIZES.flatMap((size) =>
     COLORS.map(
       (c) =>
-        `${slugify(name)}-${size.toLowerCase()}-${c.name.toLowerCase()} | ${size} | ${c.name} | 10 | `,
+        `${slugify(name)}-${size.toLowerCase()}-${c.name.toLowerCase()} | | ${size} | ${c.name} | 10 | `,
     ),
   ).join('\n');
 
@@ -193,7 +197,7 @@ function makeTemplate(categoryId = '', collectionId = ''): DraftForm {
 function productToDraft(p: Product): DraftForm {
   const variantsText = (p.variants || [])
     .map((v) =>
-      [v.sku, v.size || '', v.color || '', v.stock ?? 0, v.price ?? ''].join(' | '),
+      [v.sku, v.qikinkSku || '', v.size || '', v.color || '', v.stock ?? 0, v.price ?? ''].join(' | '),
     )
     .join('\n');
   const primary =
@@ -231,7 +235,10 @@ function productToDraft(p: Product): DraftForm {
     qikinkDesigns: Array.isArray(p.qikinkDesigns)
       ? p.qikinkDesigns.map((d) => ({
           placement: d.placement || 'fr',
+          placementSku: d.placementSku || '',
           designCode: d.designCode || '',
+          widthInches: d.widthInches != null ? Number(d.widthInches) : undefined,
+          heightInches: d.heightInches != null ? Number(d.heightInches) : undefined,
           designUrl: d.designUrl || '',
           mockupUrl: d.mockupUrl || '',
         }))
@@ -247,10 +254,11 @@ function parseVariants(text: string, fallbackPrice: number): ProductVariant[] {
     .filter(Boolean)
     .map((line, idx) => {
       const parts = line.split('|').map((p) => p.trim());
-      const [sku, size, color, stock, price] = parts;
+      const [sku, qikinkSku, size, color, stock, price] = parts;
       const colorMeta = COLORS.find((c) => c.name.toLowerCase() === (color || '').toLowerCase());
       return {
         sku: sku || `SKU-${idx + 1}`,
+        qikinkSku: qikinkSku?.trim() || undefined,
         size: size || undefined,
         color: color || undefined,
         colorHex: colorMeta?.hex,
@@ -376,6 +384,17 @@ export default function AdminProductsPage() {
     if (!d.categoryId) throw new Error('Category is required');
     if (Number.isNaN(basePrice) || basePrice < 0) throw new Error('Valid base price is required');
 
+    const category = categories.find((c) => c.id === d.categoryId);
+    const catSlug = category?.slug?.toLowerCase() || '';
+    const catName = category?.name?.toLowerCase() || '';
+    const isAccessories =
+      catSlug.includes('accessory') ||
+      catSlug.includes('accessories') ||
+      catSlug.includes('aop') ||
+      catName.includes('accessory') ||
+      catName.includes('accessories') ||
+      catName.includes('all over print');
+
     const variants = parseVariants(d.variantsText, basePrice);
     const images = d.imageUrl.trim()
       ? [
@@ -387,6 +406,51 @@ export default function AdminProductsPage() {
           },
         ]
       : undefined;
+
+    const customDesigns = d.qikinkDesigns.filter((x) => x.designUrl.trim());
+    if (d.qikinkSearchFromMyProducts === '0' && customDesigns.length === 0) {
+      throw new Error('Custom design mode requires at least one print-ready design file URL.');
+    }
+
+    const qikinkDesigns = customDesigns.map((x, idx) => {
+      const designCode = x.designCode.trim();
+      if (!designCode) {
+        throw new Error(`Design code is required for design placement ${idx + 1}.`);
+      }
+      if (designCode.length > 15) {
+        throw new Error(
+          `Design code "${designCode}" exceeds Qikink maximum limit of 15 characters.`,
+        );
+      }
+
+      const placementSku = x.placementSku?.trim();
+      if (!placementSku) {
+        throw new Error(`Placement SKU is required for design placement ${idx + 1}.`);
+      }
+
+      if (!isAccessories) {
+        if (x.widthInches == null || Number.isNaN(x.widthInches) || Number(x.widthInches) <= 0) {
+          throw new Error(
+            `Print width (inches) is required and must be greater than 0 for design placement ${idx + 1}.`,
+          );
+        }
+        if (x.heightInches == null || Number.isNaN(x.heightInches) || Number(x.heightInches) <= 0) {
+          throw new Error(
+            `Print height (inches) is required and must be greater than 0 for design placement ${idx + 1}.`,
+          );
+        }
+      }
+
+      return {
+        placement: x.placement,
+        placementSku,
+        designCode: designCode || undefined,
+        widthInches: x.widthInches != null && !Number.isNaN(x.widthInches) ? Number(x.widthInches) : undefined,
+        heightInches: x.heightInches != null && !Number.isNaN(x.heightInches) ? Number(x.heightInches) : undefined,
+        designUrl: x.designUrl.trim(),
+        mockupUrl: x.mockupUrl?.trim() || undefined,
+      };
+    });
 
     return {
       name: d.name.trim(),
@@ -413,20 +477,9 @@ export default function AdminProductsPage() {
       qikinkSku: d.qikinkSku.trim() || undefined,
       qikinkPrintTypeId: 1, // DTG only — fixed for all products
       qikinkSearchFromMyProducts: Number(d.qikinkSearchFromMyProducts),
-      qikinkDesigns:
-        d.qikinkDesigns.filter((x) => x.designUrl.trim()).length > 0
-          ? d.qikinkDesigns
-              .filter((x) => x.designUrl.trim())
-              .map((x) => ({
-                placement: x.placement,
-                designCode: x.designCode.trim() || undefined,
-                designUrl: x.designUrl.trim(),
-                mockupUrl: x.mockupUrl?.trim() || undefined,
-              }))
-          : undefined,
+      qikinkDesigns: qikinkDesigns.length > 0 ? qikinkDesigns : undefined,
       images,
-      // variants only on create (API update does not replace variants yet)
-      ...(d.isNew ? { variants } : {}),
+      variants,
     };
   };
 
@@ -959,15 +1012,26 @@ export default function AdminProductsPage() {
                               placement).
                             </p>
                             <Field
-                              label="Design code"
-                              hint="Max 20 characters. Leave blank to auto-use the product slug (trimmed to 20 chars)."
+                              label="Design code *"
+                              hint="Max 15 characters. Must be a valid unique code for Qikink."
                             >
                               <Input
                                 value={entry.designCode}
-                                maxLength={20}
                                 onChange={(e) =>
-                                  setEntry({ designCode: e.target.value.slice(0, 20) })
+                                  setEntry({ designCode: e.target.value })
                                 }
+                              />
+                            </Field>
+                            <Field
+                              label="Placement SKU *"
+                              hint="Exact Qikink placement SKU (e.g. fr, bk, ls, rs)."
+                            >
+                              <Input
+                                value={entry.placementSku || ''}
+                                onChange={(e) =>
+                                  setEntry({ placementSku: e.target.value })
+                                }
+                                placeholder="e.g. fr"
                               />
                             </Field>
 
@@ -1047,20 +1111,63 @@ export default function AdminProductsPage() {
                                   </div>
                                 </Field>
                                 <Field
-                                  label="Design code"
-                                  hint="Max 20 characters. Leave blank to auto-use the product slug (trimmed to 20 chars)."
+                                  label="Design code *"
+                                  hint="Max 15 characters. Must be a valid unique code for Qikink."
                                 >
                                   <Input
                                     value={entry.designCode}
-                                    maxLength={20}
                                     onChange={(e) => {
                                       const next = [...d.qikinkDesigns];
                                       next[idx] = {
                                         ...next[idx],
-                                        designCode: e.target.value.slice(0, 20),
+                                        designCode: e.target.value,
                                       };
                                       updateDraft(d.localKey, { qikinkDesigns: next });
                                     }}
+                                  />
+                                </Field>
+                              </div>
+
+                              <div className="grid gap-4 md:grid-cols-3">
+                                <Field label="Placement SKU *" hint="Exact Qikink placement SKU (e.g. fr, bk, ls, rs)">
+                                  <Input
+                                    value={entry.placementSku || ''}
+                                    onChange={(e) => {
+                                      const next = [...d.qikinkDesigns];
+                                      next[idx] = { ...next[idx], placementSku: e.target.value };
+                                      updateDraft(d.localKey, { qikinkDesigns: next });
+                                    }}
+                                    placeholder="e.g. fr"
+                                  />
+                                </Field>
+                                <Field label="Width (inches)">
+                                  <Input
+                                    type="number"
+                                    step="0.1"
+                                    min="0.1"
+                                    value={entry.widthInches ?? ''}
+                                    onChange={(e) => {
+                                      const next = [...d.qikinkDesigns];
+                                      const val = e.target.value !== '' ? Number(e.target.value) : undefined;
+                                      next[idx] = { ...next[idx], widthInches: val };
+                                      updateDraft(d.localKey, { qikinkDesigns: next });
+                                    }}
+                                    placeholder="e.g. 10"
+                                  />
+                                </Field>
+                                <Field label="Height (inches)">
+                                  <Input
+                                    type="number"
+                                    step="0.1"
+                                    min="0.1"
+                                    value={entry.heightInches ?? ''}
+                                    onChange={(e) => {
+                                      const next = [...d.qikinkDesigns];
+                                      const val = e.target.value !== '' ? Number(e.target.value) : undefined;
+                                      next[idx] = { ...next[idx], heightInches: val };
+                                      updateDraft(d.localKey, { qikinkDesigns: next });
+                                    }}
+                                    placeholder="e.g. 12"
                                   />
                                 </Field>
                               </div>
@@ -1116,17 +1223,10 @@ export default function AdminProductsPage() {
                     })()}
                   </div>
 
-                  <Field
-                    label={
-                      d.isNew
-                        ? 'Variants (one per line: SKU | size | color | stock | price)'
-                        : 'Variants (read-only on edit — set on create)'
-                    }
-                  >
+                  <Field label="Variants (one per line: SKU | Qikink SKU | size | color | stock | price)">
                     <Textarea
                       rows={6}
                       value={d.variantsText}
-                      disabled={!d.isNew}
                       onChange={(e) => updateDraft(d.localKey, { variantsText: e.target.value })}
                       className="font-mono text-xs"
                     />

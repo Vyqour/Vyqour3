@@ -25,29 +25,44 @@ export class QikinkJobQueue {
       runAfter?: Date;
       maxAttempts?: number;
     } = {},
+    existingTx?: Prisma.TransactionClient,
   ) {
-    // Idempotent enqueue for submit jobs on same order while pending/processing
-    if (opts.orderId && type === QikinkJobType.SUBMIT_ORDER) {
-      const existing = await this.prisma.qikinkJob.findFirst({
-        where: {
-          orderId: opts.orderId,
+    const runInTx = async (tx: Prisma.TransactionClient) => {
+      if (opts.orderId && type === QikinkJobType.SUBMIT_ORDER) {
+        // Explicit DB row-level lock on the order row to serialize concurrent enqueue calls
+        try {
+          await tx.$executeRaw`SELECT id FROM orders WHERE id = ${opts.orderId} FOR UPDATE`;
+        } catch {
+          // Ignore row lock if DB engine or mock doesn't support raw SQL row locks
+        }
+
+        const existing = await tx.qikinkJob.findFirst({
+          where: {
+            orderId: opts.orderId,
+            type,
+            status: { in: [QikinkJobStatus.PENDING, QikinkJobStatus.PROCESSING] },
+          },
+        });
+        if (existing) return existing;
+      }
+
+      return tx.qikinkJob.create({
+        data: {
           type,
-          status: { in: [QikinkJobStatus.PENDING, QikinkJobStatus.PROCESSING] },
+          orderId: opts.orderId,
+          payload: opts.payload,
+          runAfter: opts.runAfter || new Date(),
+          maxAttempts: opts.maxAttempts || this.maxAttempts(),
+          status: QikinkJobStatus.PENDING,
         },
       });
-      if (existing) return existing;
+    };
+
+    if (existingTx) {
+      return runInTx(existingTx);
     }
 
-    return this.prisma.qikinkJob.create({
-      data: {
-        type,
-        orderId: opts.orderId,
-        payload: opts.payload,
-        runAfter: opts.runAfter || new Date(),
-        maxAttempts: opts.maxAttempts || this.maxAttempts(),
-        status: QikinkJobStatus.PENDING,
-      },
-    });
+    return this.prisma.$transaction(runInTx);
   }
 
   async claimNext(types?: QikinkJobType[]) {
@@ -90,9 +105,15 @@ export class QikinkJobQueue {
     });
   }
 
-  async fail(jobId: string, error: string, attempts: number, maxAttempts: number) {
+  async fail(
+    jobId: string,
+    error: string,
+    attempts: number,
+    maxAttempts: number,
+    isPermanent = false,
+  ) {
     const delayMs = Math.min(60 * 60 * 1000, 2 ** Math.min(attempts, 8) * 15_000);
-    const dead = attempts >= maxAttempts;
+    const dead = isPermanent || attempts >= maxAttempts;
     return this.prisma.qikinkJob.update({
       where: { id: jobId },
       data: {

@@ -16,7 +16,7 @@ import {
 
 type OrderForQikink = Order & {
   items: (OrderItem & {
-    product: Product;
+    product: Product & { category?: { slug?: string; name?: string } };
     variant: ProductVariant | null;
   })[];
   shippingAddress: Address;
@@ -53,17 +53,25 @@ export function mapOrderToQikinkPayload(
   const line_items: QikinkLineItem[] = order.items.map((item) => {
     const product = item.product;
     const variant = item.variant;
-    const sku =
-      variant?.qikinkSku ||
-      product.qikinkSku ||
-      variant?.sku ||
-      item.sku ||
-      product.sku;
+    const hasVariant = Boolean(item.variantId || variant);
 
-    if (!sku) {
-      throw new BadRequestException(
-        `Missing Qikink SKU for product "${item.productName}". Set product/variant qikinkSku.`,
-      );
+    let sku: string | undefined;
+
+    if (hasVariant) {
+      sku = variant?.qikinkSku?.trim();
+      if (!sku) {
+        const vSkuStr = variant?.sku || item.sku || 'N/A';
+        throw new BadRequestException(
+          `Missing Qikink SKU for variant "${vSkuStr}" of product "${item.productName}". Set variant qikinkSku in the admin editor.`,
+        );
+      }
+    } else {
+      sku = product.qikinkSku?.trim();
+      if (!sku) {
+        throw new BadRequestException(
+          `Missing Qikink SKU for product "${item.productName}". Set product qikinkSku in the admin editor.`,
+        );
+      }
     }
 
     const searchFrom = product.qikinkSearchFromMyProducts ?? 1;
@@ -79,30 +87,78 @@ export function mapOrderToQikinkPayload(
       const rawDesigns = Array.isArray(product.qikinkDesigns)
         ? (product.qikinkDesigns as unknown as Array<{
             placement?: string;
+            placementSku?: string;
             designCode?: string;
+            widthInches?: number;
+            heightInches?: number;
             designUrl?: string;
             mockupUrl?: string;
           }>)
         : [];
 
-      const validDesigns = rawDesigns.filter((d) => d && d.designUrl);
+      const validDesigns = rawDesigns.filter((d) => d && d.designUrl?.trim());
 
       if (!validDesigns.length) {
         throw new BadRequestException(
-          `No print-ready design uploaded for "${item.productName}". Add at least one placement (front/back) in the product's Qikink settings.`,
+          `No print-ready design uploaded for "${item.productName}". Add at least one placement in the product's Qikink settings.`,
         );
       }
 
       line.print_type_id = product.qikinkPrintTypeId || 1;
-      line.designs = validDesigns.map((d) => ({
-        design_code: d.designCode || product.slug.slice(0, 20),
-        width_inches: '',
-        height_inches: '',
-        placement_sku: d.placement || 'fr',
-        design_link: d.designUrl!,
-        mockup_link: d.mockupUrl || d.designUrl!,
-      }));
-                                                       }
+
+      const catSlug = product.category?.slug?.toLowerCase() || '';
+      const catName = product.category?.name?.toLowerCase() || '';
+      const isAccessoryOrAop =
+        catSlug.includes('accessory') ||
+        catSlug.includes('accessories') ||
+        catSlug.includes('aop') ||
+        catName.includes('accessory') ||
+        catName.includes('accessories') ||
+        catName.includes('all over print');
+
+      line.designs = validDesigns.map((d) => {
+        const designCode = d.designCode?.trim();
+        if (!designCode) {
+          throw new BadRequestException(
+            `Missing design_code for design placement in product "${item.productName}". Set a design_code (max 15 chars) in the product editor.`,
+          );
+        }
+        if (designCode.length > 15) {
+          throw new BadRequestException(
+            `Qikink design_code for product "${item.productName}" exceeds maximum 15 characters ("${designCode}").`,
+          );
+        }
+
+        const placementSku = d.placementSku?.trim();
+        if (!placementSku) {
+          throw new BadRequestException(
+            `Missing placement_sku for design placement in product "${item.productName}". Set a placement_sku in the product editor.`,
+          );
+        }
+
+        if (!isAccessoryOrAop) {
+          if (d.widthInches == null || Number(d.widthInches) <= 0) {
+            throw new BadRequestException(
+              `Width (inches) is required and must be > 0 for design placement in product "${item.productName}".`,
+            );
+          }
+          if (d.heightInches == null || Number(d.heightInches) <= 0) {
+            throw new BadRequestException(
+              `Height (inches) is required and must be > 0 for design placement in product "${item.productName}".`,
+            );
+          }
+        }
+
+        return {
+          design_code: designCode,
+          width_inches: d.widthInches != null && Number(d.widthInches) > 0 ? String(d.widthInches) : '',
+          height_inches: d.heightInches != null && Number(d.heightInches) > 0 ? String(d.heightInches) : '',
+          placement_sku: placementSku,
+          design_link: d.designUrl!.trim(),
+          mockup_link: (d.mockupUrl || d.designUrl!).trim(),
+        };
+      });
+    }
     return line;
   });
 
