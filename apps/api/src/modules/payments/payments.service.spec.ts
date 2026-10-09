@@ -140,6 +140,73 @@ describe('PaymentsService - Production Safety Audit', () => {
       expect(mockQikink.enqueueOrderSubmission).not.toHaveBeenCalled();
     });
 
+    it('1d. Razorpay returns a different payment ID -> payment rejected, markOrderPaid NOT called, Qikink NOT enqueued', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          id: 'pay_rzp_DIFFERENT',
+          order_id: 'order_rzp_123',
+          amount: 100000,
+          currency: 'INR',
+          status: 'captured',
+        }),
+      } as any);
+
+      const razorpayOrderId = 'order_rzp_123';
+      const razorpayPaymentId = 'pay_rzp_456';
+      const body = `${razorpayOrderId}|${razorpayPaymentId}`;
+      const razorpaySignature = createHmac('sha256', keySecret)
+        .update(body)
+        .digest('hex');
+
+      await expect(
+        service.verifyPayment({
+          orderId: 'order_123',
+          razorpayOrderId,
+          razorpayPaymentId,
+          razorpaySignature,
+        }),
+      ).rejects.toThrow('Razorpay payment ID mismatch: expected pay_rzp_456, received pay_rzp_DIFFERENT');
+
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(mockQikink.enqueueOrderSubmission).not.toHaveBeenCalled();
+    });
+
+    it('1e. Razorpay returns a response missing payment ID, order ID, amount, currency, or status -> rejected', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
+
+      // Missing id
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          order_id: 'order_rzp_123',
+          amount: 100000,
+          currency: 'INR',
+          status: 'captured',
+        }),
+      } as any);
+
+      const razorpayOrderId = 'order_rzp_123';
+      const razorpayPaymentId = 'pay_rzp_456';
+      const body = `${razorpayOrderId}|${razorpayPaymentId}`;
+      const razorpaySignature = createHmac('sha256', keySecret)
+        .update(body)
+        .digest('hex');
+
+      await expect(
+        service.verifyPayment({
+          orderId: 'order_123',
+          razorpayOrderId,
+          razorpayPaymentId,
+          razorpaySignature,
+        }),
+      ).rejects.toThrow('Razorpay payment ID mismatch');
+
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(mockQikink.enqueueOrderSubmission).not.toHaveBeenCalled();
+    });
+
     it('1c. Razorpay API request throws/network failure -> payment rejected, markOrderPaid NOT called, Qikink NOT enqueued', async () => {
       mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
       global.fetch = jest.fn().mockRejectedValue(new Error('Network error'));

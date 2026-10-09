@@ -225,6 +225,12 @@ export class PaymentsService {
         throw new BadRequestException('Invalid payment response received from Razorpay API');
       }
 
+      if (!rzpPayment.id || rzpPayment.id !== payload.razorpayPaymentId) {
+        throw new BadRequestException(
+          `Razorpay payment ID mismatch: expected ${payload.razorpayPaymentId}, received ${rzpPayment.id || 'missing'}`,
+        );
+      }
+
       if (!rzpPayment.order_id || rzpPayment.order_id !== payload.razorpayOrderId) {
         throw new BadRequestException(
           `Razorpay payment ID ${payload.razorpayPaymentId} belongs to order ${rzpPayment.order_id || 'unknown'}, expected ${payload.razorpayOrderId}`,
