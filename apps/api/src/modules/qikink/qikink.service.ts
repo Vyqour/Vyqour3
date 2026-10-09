@@ -307,15 +307,17 @@ export class QikinkService {
 
   async processStatusSync(orderId: string) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order?.qikinkOrderId && !order?.qikinkOrderNumber) {
-      return { skipped: true };
+    if (!order?.qikinkOrderId) {
+      return { skipped: true, reason: 'missing_qikink_order_id' };
     }
     const status = await this.client.getOrderStatus({
-      orderId: order.qikinkOrderId || undefined,
+      orderId: order.qikinkOrderId,
       orderNumber: order.qikinkOrderNumber || undefined,
       internalOrderId: order.id,
     });
-    if (!status) return { skipped: true, reason: 'status_endpoint_unavailable' };
+    if (!status || typeof status !== 'object') {
+      return { skipped: true, reason: 'status_endpoint_unavailable' };
+    }
     return this.applyFulfillmentUpdate(order.id, {
       status: status.status || status.order_status,
       awb: status.awb || status.tracking_number,
@@ -357,8 +359,16 @@ export class QikinkService {
 
     let statusChanged = false;
     let becameShipped = false;
-    if (mapped && mapped !== order.status) {
-      // Don't regress terminal states
+
+    const terminalStates: OrderStatus[] = [
+      OrderStatus.DELIVERED,
+      OrderStatus.CANCELLED,
+      OrderStatus.REFUNDED,
+      OrderStatus.RETURNED,
+    ];
+
+    if (mapped && mapped !== order.status && !terminalStates.includes(order.status)) {
+      // Don't regress or overwrite higher status ranks
       const rank: Record<string, number> = {
         PENDING: 0,
         CONFIRMED: 1,
@@ -370,7 +380,7 @@ export class QikinkService {
         REFUNDED: 9,
         RETURNED: 9,
       };
-      if ((rank[mapped] || 0) >= (rank[order.status] || 0) || mapped === 'CANCELLED') {
+      if ((rank[mapped] || 0) >= (rank[order.status] || 0)) {
         data.status = mapped as OrderStatus;
         statusChanged = true;
         if (mapped === 'SHIPPED' || mapped === 'OUT_FOR_DELIVERY') {
