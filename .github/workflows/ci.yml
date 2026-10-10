@@ -50,7 +50,7 @@ jobs:
         run: npm run db:generate
 
       - name: Push Prisma schema to test database
-        run: npx prisma db push --schema=apps/api/prisma/schema.prisma
+        run: cd apps/api && npx prisma db push
 
       - name: Run Phase 8 Unit & PostgreSQL Concurrency Integration Tests
         run: |
