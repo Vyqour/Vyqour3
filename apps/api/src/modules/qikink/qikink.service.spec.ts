@@ -567,9 +567,13 @@ describe('QikinkService - Order Submission Hardening', () => {
       expect(mockClient.createOrder).not.toHaveBeenCalled();
     });
 
-    it('P8-9. Webhook attempting to overwrite a terminal order state (DELIVERED) -> prevented', async () => {
+    it('P8-9. Authenticated webhook attempting to overwrite a terminal order state (DELIVERED) -> prevented', async () => {
+      const secret = 'test_webhook_secret';
+      const bodyStr = '{"order_id":"QIK_TERM_1","status":"cancelled"}';
+      const signature = require('crypto').createHmac('sha256', secret).update(bodyStr).digest('hex');
+
       mockConfig.get.mockImplementation((key: string) => {
-        if (key === 'qikink.webhookSecret') return '';
+        if (key === 'qikink.webhookSecret') return secret;
         return null;
       });
       mockPrisma.qikinkWebhookEvent.findUnique.mockResolvedValue(null);
@@ -591,15 +595,52 @@ describe('QikinkService - Order Submission Hardening', () => {
       });
 
       const res = await service.handleWebhook(
-        {},
-        Buffer.from('{"order_id":"QIK_TERM_1","status":"cancelled"}'),
+        { 'x-qikink-signature': signature },
+        Buffer.from(bodyStr),
         { order_id: 'QIK_TERM_1', status: 'cancelled' },
       );
 
-      expect(res).toEqual({ ok: true, matched: true, orderId: 'order_1' });
+      expect(res).toEqual({ ok: true, matched: true, orderId: 'order_1', verified: true });
       const updateData = mockPrisma.order.update.mock.calls[0][0].data;
       expect(updateData.status).toBeUndefined(); // Status unchanged
       expect(mockClient.createOrder).not.toHaveBeenCalled();
+    });
+
+    it('P8-11. Unauthenticated webhook -> enqueues status sync job without directly altering order status', async () => {
+      mockConfig.get.mockImplementation((key: string) => {
+        if (key === 'qikink.webhookSecret') return ''; // Unconfigured secret
+        return null;
+      });
+      mockPrisma.qikinkWebhookEvent.findUnique.mockResolvedValue(null);
+      mockPrisma.qikinkWebhookEvent.upsert.mockResolvedValue({ id: 'evt_unauth' });
+      mockPrisma.qikinkWebhookEvent.update.mockResolvedValue({});
+      mockPrisma.qikinkApiLog.create = jest.fn().mockResolvedValue({});
+
+      mockPrisma.order.findFirst.mockResolvedValue({
+        ...baseOrder,
+        id: 'order_1',
+        status: 'PROCESSING',
+        qikinkOrderId: 'QIK_UNAUTH_1',
+      });
+
+      const res = await service.handleWebhook(
+        {},
+        Buffer.from('{"order_id":"QIK_UNAUTH_1","status":"shipped"}'),
+        { order_id: 'QIK_UNAUTH_1', status: 'shipped' },
+      );
+
+      expect(res).toEqual({
+        ok: true,
+        matched: true,
+        orderId: 'order_1',
+        verified: false,
+        queuedSync: true,
+      });
+      expect(mockQueue.enqueue).toHaveBeenCalledWith(QikinkJobType.SYNC_ORDER_STATUS, {
+        orderId: 'order_1',
+      });
+      // Order status update should NOT have been called directly
+      expect(mockPrisma.order.update).not.toHaveBeenCalled();
     });
 
     it('P8-10. Status polling with missing qikinkOrderId -> skips polling cleanly', async () => {
