@@ -511,9 +511,10 @@ async function main() {
         seoTitle: `${p.name} | VYQOUR`,
         seoDescription: p.description.slice(0, 155),
         publishedAt: new Date(),
-        averageRating: 4.2 + Math.random() * 0.7,
-        reviewCount: Math.floor(Math.random() * 40) + 5,
-        totalSold: Math.floor(Math.random() * 200),
+        // Do not seed fabricated social proof. Ratings and review counts stay empty until genuine reviews exist.
+        averageRating: 0,
+        reviewCount: 0,
+        totalSold: 0,
         images: {
           create: [0, 1, 2].map((i) => ({
             url: placeholder(p.name, 800, 1000),
