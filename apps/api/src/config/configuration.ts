@@ -34,7 +34,7 @@ export default () => ({
   webUrl: process.env.WEB_URL || 'http://localhost:3000',
   corsOrigins: buildCorsOrigins(),
   databaseUrl: process.env.DATABASE_URL,
-  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+  redisUrl: process.env.REDIS_URL,
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET,
     refreshSecret: process.env.JWT_REFRESH_SECRET,
