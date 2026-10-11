@@ -656,5 +656,83 @@ describe('QikinkService - Order Submission Hardening', () => {
       expect(mockClient.getOrderStatus).not.toHaveBeenCalled();
       expect(mockClient.createOrder).not.toHaveBeenCalled();
     });
+
+    it('P8-12. On Hold status handling -> saves qikinkStatus as On Hold without converting internal OrderStatus to PROCESSING', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        id: 'order_1',
+        status: 'CONFIRMED',
+        qikinkStatus: null,
+      });
+
+      const res = await service.applyFulfillmentUpdate('order_1', {
+        status: 'On Hold',
+        source: 'poll',
+      });
+
+      expect(res).toEqual({ orderId: 'order_1', mapped: null, status: 'On Hold' });
+      const updateData = mockPrisma.order.update.mock.calls[0][0].data;
+      expect(updateData.qikinkStatus).toBe('On Hold');
+      expect(updateData.status).toBeUndefined(); // Status unchanged (remains CONFIRMED)
+      expect(mockPrisma.orderStatusHistory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          orderId: 'order_1',
+          status: 'CONFIRMED',
+          note: 'Qikink poll status on hold: On Hold',
+          createdBy: 'qikink',
+        }),
+      });
+    });
+
+    it('P8-13. Expected delivery date extraction -> parses valid date and updates order.estimatedDelivery; safely ignores invalid dates', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        id: 'order_1',
+        status: 'PROCESSING',
+      });
+
+      await service.applyFulfillmentUpdate('order_1', {
+        status: 'shipped',
+        raw: { expected_delivery_date: '2026-11-20T10:00:00Z' },
+        source: 'poll',
+      });
+
+      const updateData = mockPrisma.order.update.mock.calls[0][0].data;
+      expect(updateData.estimatedDelivery).toEqual(new Date('2026-11-20T10:00:00Z'));
+
+      // Test invalid date string does not throw and ignores estimatedDelivery
+      mockPrisma.order.update.mockClear();
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        id: 'order_1',
+        status: 'PROCESSING',
+      });
+
+      await service.applyFulfillmentUpdate('order_1', {
+        status: 'shipped',
+        raw: { edd: 'invalid_date_xyz' },
+        source: 'poll',
+      });
+
+      const updateDataInvalid = mockPrisma.order.update.mock.calls[0][0].data;
+      expect(updateDataInvalid.estimatedDelivery).toBeUndefined();
+    });
+
+    it('P8-14. Repeated polling idempotency -> does not create duplicate orderStatusHistory when status is unchanged', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        id: 'order_1',
+        status: 'PROCESSING',
+        qikinkStatus: 'On Hold',
+      });
+
+      // Second poll receiving "On Hold" when qikinkStatus is already "On Hold"
+      await service.applyFulfillmentUpdate('order_1', {
+        status: 'On Hold',
+        source: 'poll',
+      });
+
+      expect(mockPrisma.orderStatusHistory.create).not.toHaveBeenCalled();
+    });
   });
 });
