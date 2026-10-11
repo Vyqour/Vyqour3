@@ -219,6 +219,7 @@ export class ProductsService {
           ? {
               create: dto.variants.map((v) => ({
                 sku: v.sku,
+                qikinkSku: v.qikinkSku?.trim() || null,
                 size: v.size,
                 color: v.color,
                 colorHex: v.colorHex,
@@ -307,6 +308,7 @@ export class ProductsService {
             data: dto.variants.map((v) => ({
               productId: id,
               sku: v.sku,
+              qikinkSku: v.qikinkSku?.trim() || null,
               size: v.size,
               color: v.color,
               colorHex: v.colorHex,

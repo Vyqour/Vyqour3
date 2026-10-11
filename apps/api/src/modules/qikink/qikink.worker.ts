@@ -60,8 +60,19 @@ export class QikinkWorker implements OnModuleInit, OnModuleDestroy {
           await this.queue.complete(job.id, result as object);
         } catch (err) {
           const message = (err as Error).message;
-          this.logger.warn(`Job ${job.id} failed: ${message}`);
-          await this.queue.fail(job.id, message, job.attempts, job.maxAttempts);
+          const isPermanent = (err as any)?.isPermanent === true;
+          this.logger.warn(`Job ${job.id} failed: ${message} (permanent=${isPermanent})`);
+          await this.queue.fail(job.id, message, job.attempts, job.maxAttempts, isPermanent);
+
+          if ((isPermanent || job.attempts >= job.maxAttempts) && job.orderId && job.type === QikinkJobType.SUBMIT_ORDER) {
+            await this.prisma.order.update({
+              where: { id: job.orderId },
+              data: {
+                qikinkSyncStatus: 'FAILED',
+                qikinkLastError: message.slice(0, 1000),
+              },
+            }).catch(() => undefined);
+          }
         }
       }
     } finally {

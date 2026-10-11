@@ -101,19 +101,25 @@ export class QikinkService {
       order.qikinkIdempotencyKey ||
       createHash('sha256').update(`${order.id}:${order.orderNumber}:qikink`).digest('hex').slice(0, 32);
 
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        qikinkSyncStatus: QikinkSyncStatus.QUEUED,
-        qikinkIdempotencyKey: idempotencyKey,
-        qikinkOrderNumber: toQikinkOrderNumber(order),
-        qikinkLastError: null,
-      },
-    });
+    const job = await this.prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: orderId },
+        data: {
+          qikinkSyncStatus: QikinkSyncStatus.QUEUED,
+          qikinkIdempotencyKey: idempotencyKey,
+          qikinkOrderNumber: toQikinkOrderNumber(order),
+          qikinkLastError: null,
+        },
+      });
 
-    const job = await this.queue.enqueue(QikinkJobType.SUBMIT_ORDER, {
-      orderId,
-      payload: { reason, idempotencyKey },
+      return this.queue.enqueue(
+        QikinkJobType.SUBMIT_ORDER,
+        {
+          orderId,
+          payload: { reason, idempotencyKey },
+        },
+        tx,
+      );
     });
 
     this.logger.log(`Queued Qikink submit job=${job.id} order=${order.orderNumber} reason=${reason}`);
@@ -127,12 +133,19 @@ export class QikinkService {
     });
     if (!order) throw new NotFoundException('Order not found');
 
-    if (order.qikinkOrderId) {
-      return { skipped: true, qikinkOrderId: order.qikinkOrderId };
+    if (order.qikinkOrderId || order.qikinkSyncStatus === QikinkSyncStatus.SUBMITTED) {
+      return { skipped: true, qikinkOrderId: order.qikinkOrderId, reason: 'already_submitted' };
     }
 
     if (order.paymentMethod !== PaymentMethod.COD && order.paymentStatus !== PaymentStatus.PAID) {
-      throw new BadRequestException('Cannot submit unpaid prepaid order to Qikink');
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: {
+          qikinkSyncStatus: QikinkSyncStatus.PENDING,
+          qikinkLastError: 'Waiting for prepaid payment verification',
+        },
+      });
+      return { skipped: true, reason: 'awaiting_payment' };
     }
 
     if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) {
@@ -143,32 +156,76 @@ export class QikinkService {
       return { skipped: true, reason: 'cancelled' };
     }
 
-    const shipping = this.config.get<string>('qikink.shipping') || '1';
-    const payload = mapOrderToQikinkPayload(order, { shipping });
-
-    await this.prisma.order.update({
-      where: { id: orderId },
+    // Atomic claim to prevent concurrent submissions for the same order
+    const claimResult = await this.prisma.order.updateMany({
+      where: {
+        id: orderId,
+        qikinkOrderId: null,
+        qikinkSyncStatus: { notIn: [QikinkSyncStatus.SUBMITTING, QikinkSyncStatus.SUBMITTED] },
+      },
       data: {
         qikinkSyncStatus: QikinkSyncStatus.SUBMITTING,
-        qikinkPayload: payload as object,
         qikinkAttempts: { increment: 1 },
-        qikinkOrderNumber: String(payload.order_number),
       },
     });
 
-    // Double-check race: another worker may have submitted
-    const fresh = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (fresh?.qikinkOrderId) {
-      return { skipped: true, qikinkOrderId: fresh.qikinkOrderId };
+    if (!claimResult.count) {
+      const fresh = await this.prisma.order.findUnique({ where: { id: orderId } });
+      if (fresh?.qikinkOrderId || fresh?.qikinkSyncStatus === QikinkSyncStatus.SUBMITTED) {
+        return { skipped: true, qikinkOrderId: fresh.qikinkOrderId, reason: 'already_submitted' };
+      }
+      return { skipped: true, reason: 'concurrent_submission_in_progress' };
     }
 
+    let payload: ReturnType<typeof mapOrderToQikinkPayload>;
+    try {
+      const shipping = this.config.get<string>('qikink.shipping') || '1';
+      payload = mapOrderToQikinkPayload(order, { shipping });
+
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: {
+          qikinkPayload: payload as object,
+          qikinkOrderNumber: String(payload.order_number),
+        },
+      });
+    } catch (err) {
+      const message = (err as Error).message;
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: {
+          qikinkSyncStatus: QikinkSyncStatus.FAILED,
+          qikinkLastError: message.slice(0, 1000),
+        },
+      });
+      await this.prisma.auditLog.create({
+        data: {
+          action: 'QIKINK_ORDER_SUBMIT_FAILED',
+          entity: 'Order',
+          entityId: orderId,
+          metadata: { error: message.slice(0, 500), permanent: true },
+        },
+      });
+      (err as any).isPermanent = true;
+      throw err;
+    }
+
+    /**
+     * EXTERNAL SUBMISSION SAFETY LIMITATION DOCUMENTATION:
+     * Note: Qikink's public create-order API endpoint accepts order_number, line_items, shipping_address, total_order_value, and gateway.
+     * It does not accept a custom client idempotency_key parameter in the API body/header.
+     * We use `order.qikinkIdempotencyKey` locally for internal job queue deduplication and atomic worker locks to prevent double-submitting.
+     * If worker crashes after Qikink accepts the order but before saving qikinkOrderId locally, the retry will attempt submit with the same order_number.
+     */
     try {
       const response = await this.client.createOrder(payload, orderId);
       const qikinkOrderId = response.order_id != null ? String(response.order_id) : null;
       if (!qikinkOrderId) {
-        throw new Error(
+        const err = new Error(
           `Qikink create order succeeded without order_id: ${JSON.stringify(response)}`,
         );
+        (err as any).isPermanent = true;
+        throw err;
       }
 
       await this.prisma.$transaction([
@@ -219,10 +276,17 @@ export class QikinkService {
       return { success: true, qikinkOrderId, response };
     } catch (err) {
       const message = (err as Error).message;
+      const isPermanent =
+        err instanceof BadRequestException ||
+        (err as any).isPermanent === true ||
+        (err as any).status === 400 ||
+        (err as any).statusCode === 400 ||
+        /(validation|invalid|missing|unauthorized|forbidden)/i.test(message);
+
       await this.prisma.order.update({
         where: { id: orderId },
         data: {
-          qikinkSyncStatus: QikinkSyncStatus.FAILED,
+          qikinkSyncStatus: isPermanent ? QikinkSyncStatus.FAILED : QikinkSyncStatus.QUEUED,
           qikinkLastError: message.slice(0, 1000),
         },
       });
@@ -231,24 +295,29 @@ export class QikinkService {
           action: 'QIKINK_ORDER_SUBMIT_FAILED',
           entity: 'Order',
           entityId: orderId,
-          metadata: { error: message.slice(0, 500) },
+          metadata: { error: message.slice(0, 500), permanent: isPermanent },
         },
       });
+      if (isPermanent) {
+        (err as any).isPermanent = true;
+      }
       throw err;
     }
   }
 
   async processStatusSync(orderId: string) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order?.qikinkOrderId && !order?.qikinkOrderNumber) {
-      return { skipped: true };
+    if (!order?.qikinkOrderId) {
+      return { skipped: true, reason: 'missing_qikink_order_id' };
     }
     const status = await this.client.getOrderStatus({
-      orderId: order.qikinkOrderId || undefined,
+      orderId: order.qikinkOrderId,
       orderNumber: order.qikinkOrderNumber || undefined,
       internalOrderId: order.id,
     });
-    if (!status) return { skipped: true, reason: 'status_endpoint_unavailable' };
+    if (!status || typeof status !== 'object') {
+      return { skipped: true, reason: 'status_endpoint_unavailable' };
+    }
     return this.applyFulfillmentUpdate(order.id, {
       status: status.status || status.order_status,
       awb: status.awb || status.tracking_number,
@@ -290,8 +359,16 @@ export class QikinkService {
 
     let statusChanged = false;
     let becameShipped = false;
-    if (mapped && mapped !== order.status) {
-      // Don't regress terminal states
+
+    const terminalStates: OrderStatus[] = [
+      OrderStatus.DELIVERED,
+      OrderStatus.CANCELLED,
+      OrderStatus.REFUNDED,
+      OrderStatus.RETURNED,
+    ];
+
+    if (mapped && mapped !== order.status && !terminalStates.includes(order.status)) {
+      // Don't regress or overwrite higher status ranks
       const rank: Record<string, number> = {
         PENDING: 0,
         CONFIRMED: 1,
@@ -303,7 +380,7 @@ export class QikinkService {
         REFUNDED: 9,
         RETURNED: 9,
       };
-      if ((rank[mapped] || 0) >= (rank[order.status] || 0) || mapped === 'CANCELLED') {
+      if ((rank[mapped] || 0) >= (rank[order.status] || 0)) {
         data.status = mapped as OrderStatus;
         statusChanged = true;
         if (mapped === 'SHIPPED' || mapped === 'OUT_FOR_DELIVERY') {

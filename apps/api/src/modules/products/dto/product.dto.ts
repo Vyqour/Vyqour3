@@ -47,6 +47,11 @@ export class ProductVariantDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  qikinkSku?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   size?: string;
 
   @ApiPropertyOptional()
@@ -82,10 +87,28 @@ export class QikinkDesignDto {
   @IsString()
   placement!: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Qikink placement SKU override if required' })
   @IsOptional()
   @IsString()
+  placementSku?: string;
+
+  @ApiPropertyOptional({ description: 'Design code (max 15 characters)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(15)
   designCode?: string;
+
+  @ApiPropertyOptional({ description: 'Print width in inches' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  widthInches?: number;
+
+  @ApiPropertyOptional({ description: 'Print height in inches' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  heightInches?: number;
 
   @ApiProperty({ description: 'Print-ready design file URL sent to Qikink' })
   @IsString()
