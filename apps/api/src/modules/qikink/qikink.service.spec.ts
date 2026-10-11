@@ -567,9 +567,13 @@ describe('QikinkService - Order Submission Hardening', () => {
       expect(mockClient.createOrder).not.toHaveBeenCalled();
     });
 
-    it('P8-9. Webhook attempting to overwrite a terminal order state (DELIVERED) -> prevented', async () => {
+    it('P8-9. Authenticated webhook attempting to overwrite a terminal order state (DELIVERED) -> prevented', async () => {
+      const secret = 'test_webhook_secret';
+      const bodyStr = '{"order_id":"QIK_TERM_1","status":"cancelled"}';
+      const signature = require('crypto').createHmac('sha256', secret).update(bodyStr).digest('hex');
+
       mockConfig.get.mockImplementation((key: string) => {
-        if (key === 'qikink.webhookSecret') return '';
+        if (key === 'qikink.webhookSecret') return secret;
         return null;
       });
       mockPrisma.qikinkWebhookEvent.findUnique.mockResolvedValue(null);
@@ -591,15 +595,52 @@ describe('QikinkService - Order Submission Hardening', () => {
       });
 
       const res = await service.handleWebhook(
-        {},
-        Buffer.from('{"order_id":"QIK_TERM_1","status":"cancelled"}'),
+        { 'x-qikink-signature': signature },
+        Buffer.from(bodyStr),
         { order_id: 'QIK_TERM_1', status: 'cancelled' },
       );
 
-      expect(res).toEqual({ ok: true, matched: true, orderId: 'order_1' });
+      expect(res).toEqual({ ok: true, matched: true, orderId: 'order_1', verified: true });
       const updateData = mockPrisma.order.update.mock.calls[0][0].data;
       expect(updateData.status).toBeUndefined(); // Status unchanged
       expect(mockClient.createOrder).not.toHaveBeenCalled();
+    });
+
+    it('P8-11. Unauthenticated webhook -> enqueues status sync job without directly altering order status', async () => {
+      mockConfig.get.mockImplementation((key: string) => {
+        if (key === 'qikink.webhookSecret') return ''; // Unconfigured secret
+        return null;
+      });
+      mockPrisma.qikinkWebhookEvent.findUnique.mockResolvedValue(null);
+      mockPrisma.qikinkWebhookEvent.upsert.mockResolvedValue({ id: 'evt_unauth' });
+      mockPrisma.qikinkWebhookEvent.update.mockResolvedValue({});
+      mockPrisma.qikinkApiLog.create = jest.fn().mockResolvedValue({});
+
+      mockPrisma.order.findFirst.mockResolvedValue({
+        ...baseOrder,
+        id: 'order_1',
+        status: 'PROCESSING',
+        qikinkOrderId: 'QIK_UNAUTH_1',
+      });
+
+      const res = await service.handleWebhook(
+        {},
+        Buffer.from('{"order_id":"QIK_UNAUTH_1","status":"shipped"}'),
+        { order_id: 'QIK_UNAUTH_1', status: 'shipped' },
+      );
+
+      expect(res).toEqual({
+        ok: true,
+        matched: true,
+        orderId: 'order_1',
+        verified: false,
+        queuedSync: true,
+      });
+      expect(mockQueue.enqueue).toHaveBeenCalledWith(QikinkJobType.SYNC_ORDER_STATUS, {
+        orderId: 'order_1',
+      });
+      // Order status update should NOT have been called directly
+      expect(mockPrisma.order.update).not.toHaveBeenCalled();
     });
 
     it('P8-10. Status polling with missing qikinkOrderId -> skips polling cleanly', async () => {
@@ -614,6 +655,84 @@ describe('QikinkService - Order Submission Hardening', () => {
       expect(res).toEqual({ skipped: true, reason: 'missing_qikink_order_id' });
       expect(mockClient.getOrderStatus).not.toHaveBeenCalled();
       expect(mockClient.createOrder).not.toHaveBeenCalled();
+    });
+
+    it('P8-12. On Hold status handling -> saves qikinkStatus as On Hold without converting internal OrderStatus to PROCESSING', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        id: 'order_1',
+        status: 'CONFIRMED',
+        qikinkStatus: null,
+      });
+
+      const res = await service.applyFulfillmentUpdate('order_1', {
+        status: 'On Hold',
+        source: 'poll',
+      });
+
+      expect(res).toEqual({ orderId: 'order_1', mapped: null, status: 'On Hold' });
+      const updateData = mockPrisma.order.update.mock.calls[0][0].data;
+      expect(updateData.qikinkStatus).toBe('On Hold');
+      expect(updateData.status).toBeUndefined(); // Status unchanged (remains CONFIRMED)
+      expect(mockPrisma.orderStatusHistory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          orderId: 'order_1',
+          status: 'CONFIRMED',
+          note: 'Qikink poll status on hold: On Hold',
+          createdBy: 'qikink',
+        }),
+      });
+    });
+
+    it('P8-13. Expected delivery date extraction -> parses valid date and updates order.estimatedDelivery; safely ignores invalid dates', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        id: 'order_1',
+        status: 'PROCESSING',
+      });
+
+      await service.applyFulfillmentUpdate('order_1', {
+        status: 'shipped',
+        raw: { expected_delivery_date: '2026-11-20T10:00:00Z' },
+        source: 'poll',
+      });
+
+      const updateData = mockPrisma.order.update.mock.calls[0][0].data;
+      expect(updateData.estimatedDelivery).toEqual(new Date('2026-11-20T10:00:00Z'));
+
+      // Test invalid date string does not throw and ignores estimatedDelivery
+      mockPrisma.order.update.mockClear();
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        id: 'order_1',
+        status: 'PROCESSING',
+      });
+
+      await service.applyFulfillmentUpdate('order_1', {
+        status: 'shipped',
+        raw: { edd: 'invalid_date_xyz' },
+        source: 'poll',
+      });
+
+      const updateDataInvalid = mockPrisma.order.update.mock.calls[0][0].data;
+      expect(updateDataInvalid.estimatedDelivery).toBeUndefined();
+    });
+
+    it('P8-14. Repeated polling idempotency -> does not create duplicate orderStatusHistory when status is unchanged', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        id: 'order_1',
+        status: 'PROCESSING',
+        qikinkStatus: 'On Hold',
+      });
+
+      // Second poll receiving "On Hold" when qikinkStatus is already "On Hold"
+      await service.applyFulfillmentUpdate('order_1', {
+        status: 'On Hold',
+        source: 'poll',
+      });
+
+      expect(mockPrisma.orderStatusHistory.create).not.toHaveBeenCalled();
     });
   });
 });

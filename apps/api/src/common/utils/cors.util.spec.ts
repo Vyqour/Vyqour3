@@ -54,10 +54,14 @@ function run() {
     if (err) throw err;
     denied = origin;
   });
-  assert(denied === false, 'delegate denies unknown origin');
+  assert((denied as unknown) === false, 'delegate denies unknown origin');
 
   // eslint-disable-next-line no-console
   console.log('cors.util.spec.ts: all assertions passed');
 }
 
-run();
+describe('cors.util', () => {
+  it('passes all CORS utility assertions', () => {
+    run();
+  });
+});

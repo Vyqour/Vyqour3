@@ -344,8 +344,11 @@ export class QikinkService {
     if (!order) throw new NotFoundException('Order not found');
 
     const mapped = mapQikinkStatusToOrderStatus(update.status);
+    const rawStatus = update.status || order.qikinkStatus;
+    const rawStatusChanged = Boolean(update.status && update.status !== order.qikinkStatus);
+
     const data: Prisma.OrderUpdateInput = {
-      qikinkStatus: update.status || order.qikinkStatus,
+      qikinkStatus: rawStatus,
       qikinkSyncedAt: new Date(),
     };
     if (update.awb) {
@@ -355,6 +358,23 @@ export class QikinkService {
     if (update.courier) {
       data.qikinkCourier = update.courier;
       data.carrier = update.courier;
+    }
+
+    if (update.raw && typeof update.raw === 'object') {
+      const r = update.raw as Record<string, unknown>;
+      const rawEdd =
+        r.expected_delivery_date ||
+        r.edd ||
+        r.expected_delivery ||
+        r.estimated_delivery ||
+        r.expected_delivery_date_time;
+
+      if (rawEdd && (typeof rawEdd === 'string' || typeof rawEdd === 'number')) {
+        const parsed = new Date(rawEdd);
+        if (!isNaN(parsed.getTime())) {
+          data.estimatedDelivery = parsed;
+        }
+      }
     }
 
     let statusChanged = false;
@@ -409,6 +429,15 @@ export class QikinkService {
           orderId,
           status: mapped as OrderStatus,
           note: `Qikink ${update.source}: ${update.status || mapped}`,
+          createdBy: 'qikink',
+        },
+      });
+    } else if (rawStatusChanged && update.status && /(hold|on hold)/i.test(update.status)) {
+      await this.prisma.orderStatusHistory.create({
+        data: {
+          orderId,
+          status: order.status,
+          note: `Qikink ${update.source} status on hold: ${update.status}`,
           createdBy: 'qikink',
         },
       });
@@ -477,8 +506,8 @@ export class QikinkService {
       // Secret configured but signature missing
       throw new BadRequestException('Missing Qikink webhook signature');
     } else {
-      // Dev mode without secret
-      signatureValid = true;
+      // Secret not configured — unauthenticated webhook
+      signatureValid = false;
     }
 
     const eventType = String(
@@ -542,6 +571,23 @@ export class QikinkService {
       return { ok: true, matched: false };
     }
 
+    // CRITICAL SAFETY GUARD: Prevent unauthenticated webhook events from altering order status directly.
+    // If HMAC signature was not verified (e.g. no secret configured or unconfirmed signature), enqueue
+    // an authenticated status sync job instead of applying status update directly.
+    if (!signatureValid) {
+      await this.prisma.qikinkWebhookEvent.update({
+        where: { id: event.id },
+        data: {
+          processed: true,
+          processedAt: new Date(),
+          orderId: order.id,
+          error: 'Unauthenticated webhook event: status sync enqueued for verification',
+        },
+      });
+      await this.queue.enqueue(QikinkJobType.SYNC_ORDER_STATUS, { orderId: order.id });
+      return { ok: true, matched: true, orderId: order.id, verified: false, queuedSync: true };
+    }
+
     try {
       const status = String(body.status || body.order_status || body.fulfillment_status || eventType);
       const awb = (body.awb || body.tracking_number || body.trackingNumber) as string | undefined;
@@ -557,7 +603,7 @@ export class QikinkService {
         where: { id: event.id },
         data: { processed: true, processedAt: new Date(), orderId: order.id },
       });
-      return { ok: true, matched: true, orderId: order.id };
+      return { ok: true, matched: true, orderId: order.id, verified: true };
     } catch (err) {
       await this.prisma.qikinkWebhookEvent.update({
         where: { id: event.id },

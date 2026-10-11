@@ -201,6 +201,7 @@ export function mapQikinkStatusToOrderStatus(
 ): 'PROCESSING' | 'SHIPPED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED' | 'CONFIRMED' | null {
   if (!raw) return null;
   const s = raw.toLowerCase().replace(/[_\s-]+/g, ' ');
+  if (/(hold|on hold)/.test(s)) return null;
   if (/(cancel|cancelled|canceled|rejected)/.test(s)) return 'CANCELLED';
   if (/(deliver)/.test(s)) return 'DELIVERED';
   if (/(out for delivery|ofd)/.test(s)) return 'OUT_FOR_DELIVERY';

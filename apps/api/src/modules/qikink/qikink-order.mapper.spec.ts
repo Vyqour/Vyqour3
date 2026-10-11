@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { PaymentMethod } from '@prisma/client';
 import {
   mapOrderToQikinkPayload,
+  mapQikinkStatusToOrderStatus,
   toQikinkOrderNumber,
 } from './qikink-order.mapper';
 
@@ -327,6 +328,21 @@ describe('qikink-order.mapper', () => {
       expect(payload.line_items[0].sku).toBe('PROD-QIK-MUG');
     });
 
+    it('returns null for vendor status "On Hold" or "on_hold"', () => {
+      expect(mapQikinkStatusToOrderStatus('On Hold')).toBeNull();
+      expect(mapQikinkStatusToOrderStatus('on_hold')).toBeNull();
+      expect(mapQikinkStatusToOrderStatus('Hold')).toBeNull();
+    });
+
+    it('maps processing, shipped, delivered, cancelled statuses correctly', () => {
+      expect(mapQikinkStatusToOrderStatus('processing')).toBe('PROCESSING');
+      expect(mapQikinkStatusToOrderStatus('shipped')).toBe('SHIPPED');
+      expect(mapQikinkStatusToOrderStatus('delivered')).toBe('DELIVERED');
+      expect(mapQikinkStatusToOrderStatus('cancelled')).toBe('CANCELLED');
+    });
+  });
+
+  describe('mapOrderToQikinkPayload - Variant SKU Resolution', () => {
     it('FAILS for product-only item (no variant) without product.qikinkSku', () => {
       const order = {
         ...baseOrder,
