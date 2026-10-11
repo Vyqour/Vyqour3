@@ -37,7 +37,10 @@ async function main() {
   console.log('🌱 Seeding VYQOUR database...');
 
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@vyqour.com';
-  const adminPassword = process.env.ADMIN_PASSWORD || 'VyqourAdmin@2026';
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminPassword || adminPassword.length < 16) {
+    throw new Error('Set ADMIN_PASSWORD to a unique password of at least 16 characters before running the seed script.');
+  }
   const passwordHash = await bcrypt.hash(adminPassword, 12);
 
   const admin = await prisma.user.upsert({
