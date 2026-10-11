@@ -2,7 +2,6 @@ import { Hero } from '@/components/home/hero';
 import { ProductRail } from '@/components/home/product-rail';
 import { CategoriesGrid } from '@/components/home/categories-grid';
 import { WhyUs } from '@/components/home/why-us';
-import { Reviews } from '@/components/home/reviews';
 import { InstagramGallery } from '@/components/home/instagram-gallery';
 import { serverFetch } from '@/lib/server-api';
 import type { Category, Collection, Product } from '@/types';
@@ -98,7 +97,6 @@ export default async function HomePage() {
         products={home?.bestSellers || []}
       />
       <WhyUs />
-      <Reviews />
       <InstagramGallery />
       <section className="container-px pb-24">
         <div className="glass relative overflow-hidden rounded-3xl px-8 py-14 text-center md:px-16">
