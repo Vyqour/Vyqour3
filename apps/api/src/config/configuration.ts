@@ -65,7 +65,7 @@ export default () => ({
   },
   admin: {
     email: process.env.ADMIN_EMAIL || 'admin@vyqour.com',
-    password: process.env.ADMIN_PASSWORD || 'VyqourAdmin@2026',
+    password: process.env.ADMIN_PASSWORD,
   },
   qikink: {
     enabled: (process.env.QIKINK_ENABLED || 'false').toLowerCase() === 'true',
