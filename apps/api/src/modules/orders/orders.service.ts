@@ -251,9 +251,13 @@ this.mail
     await this.prisma.$transaction(async (tx) => {
       const current = await tx.order.findUnique({ where: { id }, include: { items: true } });
       if (!current) throw new NotFoundException('Order not found');
-      if (status === OrderStatus.CANCELLED && current.status !== OrderStatus.CANCELLED) {
+      if (status === OrderStatus.CANCELLED) {
         const cancellable: OrderStatus[] = [OrderStatus.PENDING, OrderStatus.CONFIRMED];
-        if (!cancellable.includes(current.status)) {
+        const changed = await tx.order.updateMany({
+          where: { id, status: { in: cancellable } },
+          data,
+        });
+        if (changed.count !== 1) {
           throw new BadRequestException('Only pending or confirmed orders can be cancelled');
         }
         for (const item of current.items) {
@@ -270,8 +274,9 @@ this.mail
             });
           }
         }
+      } else {
+        await tx.order.update({ where: { id }, data });
       }
-      await tx.order.update({ where: { id }, data });
       await tx.orderStatusHistory.create({
         data: {
           orderId: id,
