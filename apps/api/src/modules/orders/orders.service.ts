@@ -247,6 +247,9 @@ this.mail
         order.paymentMethod === PaymentMethod.COD ? PaymentStatus.PAID : order.paymentStatus;
     }
     if (status === OrderStatus.CANCELLED) data.cancelledAt = new Date();
+    if (status === OrderStatus.CANCELLED && order.paymentStatus === PaymentStatus.PAID) {
+      throw new BadRequestException('Paid orders must be refunded before cancellation');
+    }
 
     await this.prisma.$transaction(async (tx) => {
       const current = await tx.order.findUnique({ where: { id }, include: { items: true } });
@@ -294,6 +297,9 @@ this.mail
     const cancellable: OrderStatus[] = [OrderStatus.PENDING, OrderStatus.CONFIRMED];
     if (!cancellable.includes(order.status)) {
       throw new BadRequestException('Order cannot be cancelled at this stage');
+    }
+    if (order.paymentStatus === PaymentStatus.PAID) {
+      throw new BadRequestException('Paid orders must be refunded before cancellation');
     }
     await this.prisma.$transaction(async (tx) => {
       // Conditional transition makes restocking idempotent if cancellation requests race.
