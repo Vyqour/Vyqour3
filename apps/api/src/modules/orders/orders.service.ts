@@ -34,14 +34,7 @@ export class OrdersService {
     });
     if (!address) throw new BadRequestException('Invalid shipping address');
 
-    // Stock check
-    for (const item of cart.items) {
-      if (item.variantId && item.variant) {
-        if (item.variant.stock < item.quantity) {
-          throw new BadRequestException(`Insufficient stock for ${item.product.name}`);
-        }
-      }
-    }
+    // Stock is checked and reserved atomically inside the transaction below.
 
     const orderNumber = generateOrderNumber();
     const summary = cart.summary;
@@ -97,18 +90,28 @@ export class OrdersService {
         },
       });
 
-      // Decrement stock
+      // Reserve variant stock atomically to prevent concurrent checkout overselling.
+      // Sales are counted only when online payment is verified; COD sales are counted
+      // when the COD order is confirmed.
       for (const item of cart.items) {
         if (item.variantId) {
-          await tx.productVariant.update({
-            where: { id: item.variantId },
+          const reserved = await tx.productVariant.updateMany({
+            where: { id: item.variantId, isActive: true, stock: { gte: item.quantity } },
             data: { stock: { decrement: item.quantity } },
           });
+          if (reserved.count !== 1) {
+            throw new BadRequestException(`Insufficient stock for ${item.product.name}`);
+          }
         }
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { totalSold: { increment: item.quantity } },
-        });
+      }
+
+      if (dto.paymentMethod === PaymentMethod.COD) {
+        for (const item of cart.items) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { totalSold: { increment: item.quantity } },
+          });
+        }
       }
 
       if (summary.couponCode) {
@@ -245,17 +248,39 @@ this.mail
     }
     if (status === OrderStatus.CANCELLED) data.cancelledAt = new Date();
 
-    await this.prisma.$transaction([
-      this.prisma.order.update({ where: { id }, data }),
-      this.prisma.orderStatusHistory.create({
+    await this.prisma.$transaction(async (tx) => {
+      const current = await tx.order.findUnique({ where: { id }, include: { items: true } });
+      if (!current) throw new NotFoundException('Order not found');
+      if (status === OrderStatus.CANCELLED && current.status !== OrderStatus.CANCELLED) {
+        const cancellable: OrderStatus[] = [OrderStatus.PENDING, OrderStatus.CONFIRMED];
+        if (!cancellable.includes(current.status)) {
+          throw new BadRequestException('Only pending or confirmed orders can be cancelled');
+        }
+        for (const item of current.items) {
+          if (item.variantId) {
+            await tx.productVariant.update({
+              where: { id: item.variantId },
+              data: { stock: { increment: item.quantity } },
+            });
+          }
+          if (current.paymentMethod === PaymentMethod.COD) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { totalSold: { decrement: item.quantity } },
+            });
+          }
+        }
+      }
+      await tx.order.update({ where: { id }, data });
+      await tx.orderStatusHistory.create({
         data: {
           orderId: id,
           status,
           note: dto.note,
           createdBy: adminId,
         },
-      }),
-    ]);
+      });
+    });
     return this.findOne(id, undefined, true);
   }
 
@@ -265,33 +290,42 @@ this.mail
     if (!cancellable.includes(order.status)) {
       throw new BadRequestException('Order cannot be cancelled at this stage');
     }
-    await this.prisma.$transaction([
-      this.prisma.order.update({
-        where: { id: order.id },
+    await this.prisma.$transaction(async (tx) => {
+      // Conditional transition makes restocking idempotent if cancellation requests race.
+      const changed = await tx.order.updateMany({
+        where: { id: order.id, status: { in: cancellable } },
         data: {
           status: OrderStatus.CANCELLED,
           cancelledAt: new Date(),
           cancelReason: reason,
         },
-      }),
-      this.prisma.orderStatusHistory.create({
+      });
+      if (changed.count !== 1) {
+        throw new BadRequestException('Order cannot be cancelled at this stage');
+      }
+      for (const item of order.items) {
+        if (item.variantId) {
+          await tx.productVariant.update({
+            where: { id: item.variantId },
+            data: { stock: { increment: item.quantity } },
+          });
+        }
+        if (order.paymentMethod === PaymentMethod.COD) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { totalSold: { decrement: item.quantity } },
+          });
+        }
+      }
+      await tx.orderStatusHistory.create({
         data: {
           orderId: order.id,
           status: OrderStatus.CANCELLED,
           note: reason || 'Cancelled by customer',
           createdBy: userId,
         },
-      }),
-    ]);
-    // Restock
-    for (const item of order.items) {
-      if (item.variantId) {
-        await this.prisma.productVariant.update({
-          where: { id: item.variantId },
-          data: { stock: { increment: item.quantity } },
-        });
-      }
-    }
+      });
+    });
     return this.findOne(order.id, userId);
   }
 
