@@ -37,6 +37,13 @@ describe('PaymentsService - Production Safety Audit', () => {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      orderItem: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      product: {
+        update: jest.fn(),
       },
       payment: {
         findFirst: jest.fn(),
