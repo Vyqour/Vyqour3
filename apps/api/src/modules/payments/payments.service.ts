@@ -473,4 +473,4 @@ export class PaymentsService {
       });
     });
   }
-}\n
+}
