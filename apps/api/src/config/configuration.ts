@@ -34,7 +34,7 @@ export default () => ({
   webUrl: process.env.WEB_URL || 'http://localhost:3000',
   corsOrigins: buildCorsOrigins(),
   databaseUrl: process.env.DATABASE_URL,
-  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+  redisUrl: process.env.REDIS_URL,
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET,
     refreshSecret: process.env.JWT_REFRESH_SECRET,
@@ -65,7 +65,7 @@ export default () => ({
   },
   admin: {
     email: process.env.ADMIN_EMAIL || 'admin@vyqour.com',
-    password: process.env.ADMIN_PASSWORD || 'VyqourAdmin@2026',
+    password: process.env.ADMIN_PASSWORD,
   },
   qikink: {
     enabled: (process.env.QIKINK_ENABLED || 'false').toLowerCase() === 'true',

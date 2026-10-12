@@ -101,11 +101,6 @@ export function ProductDetail({ product }: { product: Product }) {
               </>
             )}
           </div>
-          {product.averageRating > 0 && (
-            <p className="mt-2 text-sm text-muted-foreground">
-              ★ {product.averageRating.toFixed(1)} · {product.reviewCount} reviews · {product.totalSold} sold
-            </p>
-          )}
 
           <p className="mt-6 text-sm leading-relaxed text-muted-foreground">
             {product.shortDescription || product.description}

@@ -107,11 +107,6 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
               <span className="text-xs text-muted-foreground line-through">{formatInr(compare)}</span>
             )}
           </div>
-          {product.averageRating > 0 && (
-            <p className="text-xs text-muted-foreground">
-              ★ {product.averageRating.toFixed(1)} · {product.reviewCount} reviews
-            </p>
-          )}
         </div>
       </Link>
     </motion.article>

@@ -37,7 +37,10 @@ async function main() {
   console.log('🌱 Seeding VYQOUR database...');
 
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@vyqour.com';
-  const adminPassword = process.env.ADMIN_PASSWORD || 'VyqourAdmin@2026';
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminPassword || adminPassword.length < 16) {
+    throw new Error('Set ADMIN_PASSWORD to a unique password of at least 16 characters before running the seed script.');
+  }
   const passwordHash = await bcrypt.hash(adminPassword, 12);
 
   const admin = await prisma.user.upsert({
@@ -511,9 +514,10 @@ async function main() {
         seoTitle: `${p.name} | VYQOUR`,
         seoDescription: p.description.slice(0, 155),
         publishedAt: new Date(),
-        averageRating: 4.2 + Math.random() * 0.7,
-        reviewCount: Math.floor(Math.random() * 40) + 5,
-        totalSold: Math.floor(Math.random() * 200),
+        // Do not seed fabricated social proof. Ratings and review counts stay empty until genuine reviews exist.
+        averageRating: 0,
+        reviewCount: 0,
+        totalSold: 0,
         images: {
           create: [0, 1, 2].map((i) => ({
             url: placeholder(p.name, 800, 1000),

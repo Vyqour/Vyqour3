@@ -68,13 +68,30 @@ export class CartService {
     if (dto.variantId) {
       const variant = product.variants.find((v) => v.id === dto.variantId);
       if (!variant || !variant.isActive) throw new BadRequestException('Invalid variant');
-      if (variant.stock < dto.quantity) throw new BadRequestException('Insufficient stock');
+      // Combined quantity is checked after loading the current cart below.
     }
 
     const cart = await this.getOrCreateCart(userId, sessionId);
     const existing = cart.items.find(
       (i) => i.productId === dto.productId && i.variantId === (dto.variantId || null),
     );
+    if (dto.variantId) {
+      const variant = product.variants.find((v) => v.id === dto.variantId);
+      const requestedTotal = (existing?.quantity || 0) + dto.quantity;
+      if (!variant || variant.stock < requestedTotal) {
+        throw new BadRequestException('Insufficient stock for requested cart quantity');
+      }
+    } else {
+      const inventory = await this.prisma.inventory.findUnique({
+        where: { productId: dto.productId },
+      });
+      if (inventory && inventory.trackInventory) {
+        const requestedTotal = (existing?.quantity || 0) + dto.quantity;
+        if (requestedTotal > inventory.quantity) {
+          throw new BadRequestException('Insufficient stock for requested cart quantity');
+        }
+      }
+    }
 
     if (existing) {
       await this.prisma.cartItem.update({
@@ -101,6 +118,22 @@ export class CartService {
     if (dto.quantity === 0) {
       await this.prisma.cartItem.delete({ where: { id: itemId } });
     } else {
+      if (item.variantId) {
+        const variant = await this.prisma.productVariant.findUnique({
+          where: { id: item.variantId },
+          select: { stock: true, isActive: true },
+        });
+        if (!variant || !variant.isActive || dto.quantity > variant.stock) {
+          throw new BadRequestException('Insufficient stock for requested cart quantity');
+        }
+      } else {
+        const inventory = await this.prisma.inventory.findUnique({
+          where: { productId: item.productId },
+        });
+        if (inventory && inventory.trackInventory && dto.quantity > inventory.quantity) {
+          throw new BadRequestException('Insufficient stock for requested cart quantity');
+        }
+      }
       await this.prisma.cartItem.update({
         where: { id: itemId },
         data: { quantity: dto.quantity },
