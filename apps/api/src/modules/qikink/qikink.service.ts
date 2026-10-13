@@ -476,7 +476,7 @@ export class QikinkService {
   /**
    * Inbound webhook from Qikink or a middleware that forwards fulfillment events.
    * Public Qikink docs focus on order create; webhooks are account-configured.
-   * We accept a flexible payload and verify optional HMAC signature.
+   * We accept a flexible payload and require a configured HMAC signature.
    */
   async handleWebhook(
     headers: Record<string, string | string[] | undefined>,
@@ -489,25 +489,27 @@ export class QikinkService {
       (headers['x-hub-signature-256'] as string) ||
       '';
     const secret = this.config.get<string>('qikink.webhookSecret') || '';
-    let signatureValid = false;
-    if (secret && signatureHeader && rawBody) {
-      const raw = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
-      const expected = createHmac('sha256', secret).update(raw).digest('hex');
-      const provided = signatureHeader.replace(/^sha256=/i, '').trim();
-      try {
-        signatureValid = timingSafeEqual(Buffer.from(expected), Buffer.from(provided));
-      } catch {
-        signatureValid = false;
-      }
-      if (!signatureValid) {
-        throw new BadRequestException('Invalid Qikink webhook signature');
-      }
-    } else if (secret) {
-      // Secret configured but signature missing
+    if (!secret) {
+      // Fail closed: a public webhook without a configured shared secret cannot be trusted.
+      throw new BadRequestException('Qikink webhook authentication is not configured');
+    }
+    if (!signatureHeader) {
       throw new BadRequestException('Missing Qikink webhook signature');
-    } else {
-      // Secret not configured — unauthenticated webhook
-      signatureValid = false;
+    }
+    if (!rawBody) {
+      throw new BadRequestException('Missing raw body for Qikink webhook signature verification');
+    }
+
+    const raw = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
+    const expected = createHmac('sha256', secret).update(raw).digest('hex');
+    const provided = signatureHeader.replace(/^sha256=/i, '').trim();
+    const expectedBuffer = Buffer.from(expected, 'hex');
+    const providedBuffer = Buffer.from(provided, 'hex');
+    const signatureValid =
+      expectedBuffer.length === providedBuffer.length &&
+      timingSafeEqual(expectedBuffer, providedBuffer);
+    if (!signatureValid) {
+      throw new BadRequestException('Invalid Qikink webhook signature');
     }
 
     const eventType = String(
