@@ -1,6 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { OrderStatus, PaymentMethod, PaymentStatus } from '@prisma/client';
+import { OrderStatus, PaymentMethod, PaymentStatus, QikinkSyncStatus } from '@prisma/client';
 import { MailService } from '../../mail/mail.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CartService } from '../cart/cart.service';
@@ -191,6 +191,16 @@ describe('OrdersService', () => {
 
       await service.cancel('o1', 'u1', 'Changed mind');
 
+      expect(prisma.order.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            qikinkOrderId: null,
+            qikinkSyncStatus: {
+              notIn: [QikinkSyncStatus.SUBMITTING, QikinkSyncStatus.SUBMITTED],
+            },
+          }),
+        }),
+      );
       expect(prisma.inventory.update).toHaveBeenCalledWith({
         where: { productId: 'p1' },
         data: { reserved: { decrement: 2 } },
@@ -217,6 +227,16 @@ describe('OrdersService', () => {
 
       await service.updateStatus('o2', { status: OrderStatus.REFUNDED, note: 'Order refunded' }, 'admin1');
 
+      expect(prisma.order.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            qikinkOrderId: null,
+            qikinkSyncStatus: {
+              notIn: [QikinkSyncStatus.SUBMITTING, QikinkSyncStatus.SUBMITTED],
+            },
+          }),
+        }),
+      );
       expect(prisma.inventory.update).toHaveBeenCalledWith({
         where: { productId: 'p1' },
         data: { reserved: { decrement: 1 } },
