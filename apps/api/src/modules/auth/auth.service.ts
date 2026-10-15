@@ -53,7 +53,7 @@ export class AuthService {
     meta?: { userAgent?: string; ipAddress?: string },
   ) {
     const token = randomBytes(48).toString('hex');
-    const days = 7;
+    const days = 30; // 30-day target session duration
     const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     await this.prisma.refreshToken.create({
       data: {
