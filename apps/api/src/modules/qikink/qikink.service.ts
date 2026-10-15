@@ -175,14 +175,6 @@ export class QikinkService {
       return { skipped: true, reason: 'awaiting_payment' };
     }
 
-    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) {
-      await this.prisma.order.update({
-        where: { id: orderId },
-        data: { qikinkSyncStatus: QikinkSyncStatus.CANCELLED },
-      });
-      return { skipped: true, reason: 'cancelled' };
-    }
-
     // Atomic claim coordinates with cancellation/refund via the same order row.
     // If cancellation commits first, this predicate fails. If this claim commits
     // first, cancellation/refund must reject the SUBMITTING state and cannot
