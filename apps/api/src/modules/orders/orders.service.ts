@@ -274,21 +274,27 @@ this.mail
     await this.prisma.$transaction(async (tx) => {
       const current = await tx.order.findUnique({ where: { id }, include: { items: true } });
       if (!current) throw new NotFoundException('Order not found');
-      if (status === OrderStatus.CANCELLED || status === OrderStatus.REFUNDED) {
+
+      if (status === OrderStatus.CANCELLED) {
         const cancellable: OrderStatus[] = [
           OrderStatus.PENDING,
           OrderStatus.CONFIRMED,
-          OrderStatus.PROCESSING,
         ];
+        // Enforce paymentStatus !== PAID in the DB query to close payment/cancellation race conditions
         const changed = await tx.order.updateMany({
-          where: { id, status: { in: cancellable } },
+          where: {
+            id,
+            status: { in: cancellable },
+            paymentStatus: { not: PaymentStatus.PAID },
+          },
           data: {
             ...data,
-            paymentStatus: status === OrderStatus.REFUNDED ? PaymentStatus.REFUNDED : data.paymentStatus,
+            status: OrderStatus.CANCELLED,
+            cancelledAt: new Date(),
           },
         });
         if (changed.count !== 1) {
-          throw new BadRequestException('Order status cannot be updated to cancelled or refunded at this stage');
+          throw new BadRequestException('Only unpaid pending or confirmed orders can be cancelled. Paid orders must be refunded.');
         }
         for (const item of current.items) {
           if (item.variantId) {
@@ -307,12 +313,57 @@ this.mail
               });
             }
           }
-          if (current.paymentMethod === PaymentMethod.COD || current.paymentStatus === PaymentStatus.PAID) {
+          if (current.paymentMethod === PaymentMethod.COD) {
             await tx.product.update({
               where: { id: item.productId },
               data: { totalSold: { decrement: item.quantity } },
             });
           }
+        }
+      } else if (status === OrderStatus.REFUNDED) {
+        // Only paid orders in cancellable/refundable states can be refunded
+        const refundable: OrderStatus[] = [
+          OrderStatus.PENDING,
+          OrderStatus.CONFIRMED,
+          OrderStatus.PROCESSING,
+        ];
+        const changed = await tx.order.updateMany({
+          where: {
+            id,
+            status: { in: refundable },
+            paymentStatus: PaymentStatus.PAID,
+          },
+          data: {
+            ...data,
+            status: OrderStatus.REFUNDED,
+            paymentStatus: PaymentStatus.REFUNDED,
+            cancelledAt: new Date(),
+          },
+        });
+        if (changed.count !== 1) {
+          throw new BadRequestException('Only paid orders in pending, confirmed, or processing states can be refunded.');
+        }
+        for (const item of current.items) {
+          if (item.variantId) {
+            await tx.productVariant.update({
+              where: { id: item.variantId },
+              data: { stock: { increment: item.quantity } },
+            });
+          } else {
+            const inventory = await tx.inventory.findUnique({
+              where: { productId: item.productId },
+            });
+            if (inventory && inventory.trackInventory) {
+              await tx.inventory.update({
+                where: { productId: item.productId },
+                data: { reserved: { decrement: Math.min(inventory.reserved, item.quantity) } },
+              });
+            }
+          }
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { totalSold: { decrement: item.quantity } },
+          });
         }
       } else {
         await tx.order.update({ where: { id }, data });
@@ -339,9 +390,13 @@ this.mail
       throw new BadRequestException('Paid orders must be refunded before cancellation');
     }
     await this.prisma.$transaction(async (tx) => {
-      // Conditional transition makes restocking idempotent if cancellation requests race.
+      // Conditional transition with paymentStatus filter prevents race condition with markOrderPaid
       const changed = await tx.order.updateMany({
-        where: { id: order.id, status: { in: cancellable } },
+        where: {
+          id: order.id,
+          status: { in: cancellable },
+          paymentStatus: { not: PaymentStatus.PAID },
+        },
         data: {
           status: OrderStatus.CANCELLED,
           cancelledAt: new Date(),
@@ -349,7 +404,7 @@ this.mail
         },
       });
       if (changed.count !== 1) {
-        throw new BadRequestException('Order cannot be cancelled at this stage');
+        throw new BadRequestException('Order cannot be cancelled at this stage or payment was completed');
       }
       for (const item of order.items) {
         if (item.variantId) {
