@@ -84,26 +84,36 @@ export class QikinkService {
       return { queued: false, reason: 'awaiting_payment' };
     }
 
-    // Only confirmed+ orders
-    const allowed: OrderStatus[] = [
-      OrderStatus.CONFIRMED,
-      OrderStatus.PROCESSING,
-      OrderStatus.SHIPPED,
-    ];
-    if (!allowed.includes(order.status) && order.status === OrderStatus.PENDING) {
-      // COD path may still be pending briefly — allow CONFIRMED only
-      if (order.paymentMethod !== PaymentMethod.COD) {
-        return { queued: false, reason: 'order_not_confirmed' };
-      }
+    // Only confirmed/processing orders may enter the fulfillment queue.
+    // The conditional write is important: cancellation/refund and enqueue must
+    // compete on the same order row, rather than relying on the earlier read.
+    const allowed: OrderStatus[] = [OrderStatus.CONFIRMED, OrderStatus.PROCESSING];
+    if (!allowed.includes(order.status)) {
+      return { queued: false, reason: 'order_not_confirmed' };
     }
 
     const idempotencyKey =
       order.qikinkIdempotencyKey ||
       createHash('sha256').update(`${order.id}:${order.orderNumber}:qikink`).digest('hex').slice(0, 32);
 
-    const job = await this.prisma.$transaction(async (tx) => {
-      await tx.order.update({
-        where: { id: orderId },
+    const result = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.order.updateMany({
+        where: {
+          id: orderId,
+          status: { in: allowed },
+          qikinkOrderId: null,
+          qikinkSyncStatus: {
+            notIn: [
+              QikinkSyncStatus.SUBMITTING,
+              QikinkSyncStatus.SUBMITTED,
+              QikinkSyncStatus.CANCELLED,
+            ],
+          },
+          OR: [
+            { paymentMethod: PaymentMethod.COD },
+            { paymentStatus: PaymentStatus.PAID },
+          ],
+        },
         data: {
           qikinkSyncStatus: QikinkSyncStatus.QUEUED,
           qikinkIdempotencyKey: idempotencyKey,
@@ -112,7 +122,9 @@ export class QikinkService {
         },
       });
 
-      return this.queue.enqueue(
+      if (claimed.count !== 1) return { job: null };
+
+      const job = await this.queue.enqueue(
         QikinkJobType.SUBMIT_ORDER,
         {
           orderId,
@@ -120,10 +132,13 @@ export class QikinkService {
         },
         tx,
       );
+      return { job };
     });
 
-    this.logger.log(`Queued Qikink submit job=${job.id} order=${order.orderNumber} reason=${reason}`);
-    return { queued: true, jobId: job.id };
+    if (!result.job) return { queued: false, reason: 'order_state_changed' };
+
+    this.logger.log(`Queued Qikink submit job=${result.job.id} order=${order.orderNumber} reason=${reason}`);
+    return { queued: true, jobId: result.job.id };
   }
 
   async processSubmitJob(orderId: string) {
@@ -156,12 +171,26 @@ export class QikinkService {
       return { skipped: true, reason: 'cancelled' };
     }
 
-    // Atomic claim to prevent concurrent submissions for the same order
+    // Atomic claim coordinates with cancellation/refund via the same order row.
+    // If cancellation commits first, this predicate fails. If this claim commits
+    // first, cancellation/refund must reject the SUBMITTING state and cannot
+    // restore inventory while the external request is in flight.
     const claimResult = await this.prisma.order.updateMany({
       where: {
         id: orderId,
+        status: { in: [OrderStatus.CONFIRMED, OrderStatus.PROCESSING] },
         qikinkOrderId: null,
-        qikinkSyncStatus: { notIn: [QikinkSyncStatus.SUBMITTING, QikinkSyncStatus.SUBMITTED] },
+        qikinkSyncStatus: {
+          notIn: [
+            QikinkSyncStatus.SUBMITTING,
+            QikinkSyncStatus.SUBMITTED,
+            QikinkSyncStatus.CANCELLED,
+          ],
+        },
+        OR: [
+          { paymentMethod: PaymentMethod.COD },
+          { paymentStatus: PaymentStatus.PAID },
+        ],
       },
       data: {
         qikinkSyncStatus: QikinkSyncStatus.SUBMITTING,
