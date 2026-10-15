@@ -201,7 +201,7 @@ describe('OrdersService', () => {
       });
     });
 
-    it('should decrement totalSold for refunded prepaid orders when status is set to REFUNDED', async () => {
+    it('should decrement totalSold and restore stock for refunded prepaid orders when status is set to REFUNDED', async () => {
       const order = {
         id: 'o2',
         userId: 'u1',
@@ -213,10 +213,18 @@ describe('OrdersService', () => {
       prisma.order.findUnique.mockResolvedValue(order);
       prisma.order.findFirst.mockResolvedValue(order);
       prisma.order.updateMany.mockResolvedValue({ count: 1 });
+      prisma.inventory.findUnique.mockResolvedValue({ productId: 'p1', reserved: 1, trackInventory: true });
 
       await service.updateStatus('o2', { status: OrderStatus.REFUNDED, note: 'Order refunded' }, 'admin1');
 
-      expect(prisma.order.update).toHaveBeenCalled();
+      expect(prisma.inventory.update).toHaveBeenCalledWith({
+        where: { productId: 'p1' },
+        data: { reserved: { decrement: 1 } },
+      });
+      expect(prisma.product.update).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        data: { totalSold: { decrement: 1 } },
+      });
     });
 
     it('should throw error if order status transition in cancel is raced or already changed', async () => {
