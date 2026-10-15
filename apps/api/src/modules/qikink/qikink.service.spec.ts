@@ -143,6 +143,19 @@ describe('QikinkService - Order Submission Hardening', () => {
       response: { order_id: 'QIK12345', message: 'Success' },
     });
     expect(mockClient.createOrder).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.order.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: { in: ['CONFIRMED', 'PROCESSING'] },
+          qikinkOrderId: null,
+          qikinkSyncStatus: { notIn: ['SUBMITTING', 'SUBMITTED', 'CANCELLED'] },
+          OR: [
+            { paymentMethod: PaymentMethod.COD },
+            { paymentStatus: PaymentStatus.PAID },
+          ],
+        }),
+      }),
+    );
     expect(mockPrisma.order.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'order_1' },
