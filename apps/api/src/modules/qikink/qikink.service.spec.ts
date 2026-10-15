@@ -374,8 +374,13 @@ describe('QikinkService - Order Submission Hardening', () => {
     const res = await service.enqueueOrderSubmission('order_1', 'auto');
 
     expect(res.queued).toBe(true);
-    expect(mockPrisma.order.update).toHaveBeenCalledWith(
+    expect(mockPrisma.order.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'order_1',
+          status: { in: ['CONFIRMED', 'PROCESSING'] },
+          qikinkOrderId: null,
+        }),
         data: expect.objectContaining({
           qikinkIdempotencyKey: 'existing_key_999',
         }),
