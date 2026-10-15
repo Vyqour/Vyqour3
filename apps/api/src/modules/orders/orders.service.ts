@@ -6,7 +6,7 @@ import {
   NotFoundException,
   forwardRef,
 } from '@nestjs/common';
-import { OrderStatus, PaymentMethod, PaymentStatus, Prisma } from '@prisma/client';
+import { OrderStatus, PaymentMethod, PaymentStatus, Prisma, QikinkSyncStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../../mail/mail.service';
 import { CartService } from '../cart/cart.service';
@@ -286,6 +286,10 @@ this.mail
             id,
             status: { in: cancellable },
             paymentStatus: { not: PaymentStatus.PAID },
+            qikinkOrderId: null,
+            qikinkSyncStatus: {
+              notIn: [QikinkSyncStatus.SUBMITTING, QikinkSyncStatus.SUBMITTED],
+            },
           },
           data: {
             ...data,
@@ -332,6 +336,10 @@ this.mail
             id,
             status: { in: refundable },
             paymentStatus: PaymentStatus.PAID,
+            qikinkOrderId: null,
+            qikinkSyncStatus: {
+              notIn: [QikinkSyncStatus.SUBMITTING, QikinkSyncStatus.SUBMITTED],
+            },
           },
           data: {
             ...data,
@@ -396,6 +404,10 @@ this.mail
           id: order.id,
           status: { in: cancellable },
           paymentStatus: { not: PaymentStatus.PAID },
+            qikinkOrderId: null,
+            qikinkSyncStatus: {
+              notIn: [QikinkSyncStatus.SUBMITTING, QikinkSyncStatus.SUBMITTED],
+            },
         },
         data: {
           status: OrderStatus.CANCELLED,
