@@ -1,10 +1,12 @@
 import { ConfigService } from '@nestjs/config';
 import {
   AddressType,
+  OrderStatus,
   PaymentMethod,
   PaymentStatus,
   QikinkJobStatus,
   QikinkJobType,
+  QikinkSyncStatus,
   Role,
   UserStatus,
 } from '@prisma/client';
@@ -94,6 +96,71 @@ describe('QikinkJobQueue Real PostgreSQL Concurrency Integration Test', () => {
         await prisma.user.deleteMany({ where: { id: testUserId } });
       }
       await prisma.$disconnect();
+    }
+  });
+
+  it('verifies a real PostgreSQL Qikink claim and cancellation race has exactly one winner', async () => {
+    const raceOrder = await prisma.order.create({
+      data: {
+        id: `pg_race_order_${Date.now()}`,
+        orderNumber: `PG-RACE-${Date.now()}`,
+        userId: testUserId,
+        subtotal: 1000,
+        total: 1000,
+        shippingAddressId: testAddressId,
+        paymentMethod: PaymentMethod.COD,
+        paymentStatus: PaymentStatus.PENDING,
+        status: OrderStatus.CONFIRMED,
+      },
+    });
+
+    try {
+      const [claim, cancel] = await Promise.all([
+        prisma.order.updateMany({
+          where: {
+            id: raceOrder.id,
+            status: { in: [OrderStatus.CONFIRMED, OrderStatus.PROCESSING] },
+            qikinkOrderId: null,
+            qikinkSyncStatus: {
+              notIn: [
+                QikinkSyncStatus.SUBMITTING,
+                QikinkSyncStatus.SUBMITTED,
+                QikinkSyncStatus.CANCELLED,
+              ],
+            },
+            OR: [
+              { paymentMethod: PaymentMethod.COD },
+              { paymentStatus: PaymentStatus.PAID },
+            ],
+          },
+          data: { qikinkSyncStatus: QikinkSyncStatus.SUBMITTING },
+        }),
+        prisma.order.updateMany({
+          where: {
+            id: raceOrder.id,
+            status: { in: [OrderStatus.PENDING, OrderStatus.CONFIRMED] },
+            paymentStatus: { not: PaymentStatus.PAID },
+            qikinkOrderId: null,
+            qikinkSyncStatus: {
+              notIn: [QikinkSyncStatus.SUBMITTING, QikinkSyncStatus.SUBMITTED],
+            },
+          },
+          data: { status: OrderStatus.CANCELLED },
+        }),
+      ]);
+
+      expect(claim.count + cancel.count).toBe(1);
+      const finalOrder = await prisma.order.findUniqueOrThrow({
+        where: { id: raceOrder.id },
+      });
+      if (claim.count === 1) {
+        expect(finalOrder.qikinkSyncStatus).toBe(QikinkSyncStatus.SUBMITTING);
+        expect(finalOrder.status).toBe(OrderStatus.CONFIRMED);
+      } else {
+        expect(finalOrder.status).toBe(OrderStatus.CANCELLED);
+      }
+    } finally {
+      await prisma.order.delete({ where: { id: raceOrder.id } });
     }
   });
 
