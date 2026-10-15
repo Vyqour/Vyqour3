@@ -72,6 +72,10 @@ export class QikinkService {
       return { queued: false, reason: 'already_submitted', qikinkOrderId: order.qikinkOrderId };
     }
 
+    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) {
+      return { queued: false, reason: 'order_not_confirmed' };
+    }
+
     // Prepaid must be PAID before Qikink submission
     if (order.paymentMethod !== PaymentMethod.COD && order.paymentStatus !== PaymentStatus.PAID) {
       await this.prisma.order.update({
@@ -150,6 +154,14 @@ export class QikinkService {
 
     if (order.qikinkOrderId || order.qikinkSyncStatus === QikinkSyncStatus.SUBMITTED) {
       return { skipped: true, qikinkOrderId: order.qikinkOrderId, reason: 'already_submitted' };
+    }
+
+    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) {
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: { qikinkSyncStatus: QikinkSyncStatus.CANCELLED },
+      });
+      return { skipped: true, reason: 'cancelled' };
     }
 
     if (order.paymentMethod !== PaymentMethod.COD && order.paymentStatus !== PaymentStatus.PAID) {
