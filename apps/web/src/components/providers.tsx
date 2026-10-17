@@ -14,13 +14,17 @@ function AuthBootstrap({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
+    // Always attempt session validation/restoration if tokens or a user state exist
     const token = typeof window !== 'undefined' ? localStorage.getItem('vyqour_access') : null;
-    if (token) {
+    const refresh = typeof window !== 'undefined' ? localStorage.getItem('vyqour_refresh') : null;
+
+    if (token || refresh || user) {
       fetchMe().then((u) => {
         if (u) fetchWish().catch(() => undefined);
       });
     }
-  }, [hydrated, fetchMe, fetchWish]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
 
   useEffect(() => {
     if (user) fetchWish().catch(() => undefined);

@@ -79,29 +79,42 @@ function networkErrorMessage(err: unknown): string {
   return base;
 }
 
-async function refreshAccessToken(): Promise<string | null> {
+let refreshPromise: Promise<string | null> | null = null;
+
+export async function refreshAccessToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
-  const refresh = localStorage.getItem('vyqour_refresh');
-  if (!refresh) return null;
-  try {
-    const res = await fetch(`${API_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ refreshToken: refresh }),
-    });
-    if (!res.ok) {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    const refresh = localStorage.getItem('vyqour_refresh');
+    try {
+      const res = await fetch(`${API_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(refresh ? { refreshToken: refresh } : {}),
+      });
+      if (!res.ok) {
+        clearTokens();
+        return null;
+      }
+      const json = await res.json();
+      const data = json.data || json;
+      if (data?.accessToken) {
+        setTokens(data.accessToken, data.refreshToken || refresh);
+        return data.accessToken as string;
+      }
       clearTokens();
       return null;
+    } catch {
+      clearTokens();
+      return null;
+    } finally {
+      refreshPromise = null;
     }
-    const json = await res.json();
-    const data = json.data || json;
-    setTokens(data.accessToken, data.refreshToken);
-    return data.accessToken as string;
-  } catch {
-    clearTokens();
-    return null;
-  }
+  })();
+
+  return refreshPromise;
 }
 
 export async function api<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {

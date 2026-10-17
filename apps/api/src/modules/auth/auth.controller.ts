@@ -71,7 +71,7 @@ function setAuthCookies(
   });
   res.cookie('refresh_token', refreshToken, {
     ...base,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
   });
 }
 

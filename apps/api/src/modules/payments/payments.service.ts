@@ -404,17 +404,56 @@ export class PaymentsService {
       source: string;
     },
   ) {
-    await this.prisma.$transaction([
-      this.prisma.order.update({
-        where: { id: orderId },
+    await this.prisma.$transaction(async (tx) => {
+      // A conditional transition ensures concurrent webhook/client callbacks count a sale once
+      // and cannot confirm an order that was already cancelled or refunded.
+      const changed = await tx.order.updateMany({
+        where: {
+          id: orderId,
+          paymentStatus: { not: PaymentStatus.PAID },
+          status: { notIn: [OrderStatus.CANCELLED, OrderStatus.REFUNDED] },
+        },
         data: {
           paymentStatus: PaymentStatus.PAID,
           status: OrderStatus.CONFIRMED,
           paymentId: meta.paymentId,
           paymentGatewayRef: meta.gatewayOrderId,
         },
-      }),
-      this.prisma.payment.updateMany({
+      });
+
+      if (changed.count !== 1) {
+        const current = await tx.order.findUnique({
+          where: { id: orderId },
+          select: { paymentStatus: true, status: true },
+        });
+        if (current?.paymentStatus === PaymentStatus.PAID) return;
+        if (current?.status === OrderStatus.CANCELLED || current?.status === OrderStatus.REFUNDED) {
+          throw new BadRequestException('Cannot mark a cancelled or refunded order as paid');
+        }
+        throw new BadRequestException('Order payment state changed; retry verification');
+      }
+
+      // COD orders already increment totalSold at creation.
+      // Increment totalSold only for non-COD prepaid orders to avoid double counting.
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        select: { paymentMethod: true },
+      });
+
+      if (order?.paymentMethod !== PaymentMethod.COD) {
+        const items = await tx.orderItem.findMany({
+          where: { orderId },
+          select: { productId: true, quantity: true },
+        });
+        for (const item of items) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { totalSold: { increment: item.quantity } },
+          });
+        }
+      }
+
+      await tx.payment.updateMany({
         where: { orderId },
         data: {
           status: PaymentStatus.PAID,
@@ -424,23 +463,23 @@ export class PaymentsService {
           paidAt: new Date(),
           metadata: { source: meta.source },
         },
-      }),
-      this.prisma.orderStatusHistory.create({
+      });
+      await tx.orderStatusHistory.create({
         data: {
           orderId,
           status: OrderStatus.CONFIRMED,
           note: `Payment verified (${meta.source})`,
           createdBy: 'payments',
         },
-      }),
-      this.prisma.auditLog.create({
+      });
+      await tx.auditLog.create({
         data: {
           action: 'PAYMENT_PAID',
           entity: 'Order',
           entityId: orderId,
           metadata: meta as object,
         },
-      }),
-    ]);
+      });
+    });
   }
 }
