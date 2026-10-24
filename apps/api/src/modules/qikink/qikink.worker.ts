@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
-import { QikinkJobType } from '@prisma/client';
+import { QikinkJobType, QikinkSyncStatus } from '@prisma/client';
 import { QikinkJobQueue } from './queue/qikink-job.queue';
 import { QikinkService } from './qikink.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -65,10 +65,18 @@ export class QikinkWorker implements OnModuleInit, OnModuleDestroy {
           await this.queue.fail(job.id, message, job.attempts, job.maxAttempts, isPermanent);
 
           if ((isPermanent || job.attempts >= job.maxAttempts) && job.orderId && job.type === QikinkJobType.SUBMIT_ORDER) {
-            await this.prisma.order.update({
-              where: { id: job.orderId },
+            // Guarded FAILED marking: never overwrite an order whose submission
+            // actually completed (provider accepted it) if a later queue step
+            // failed — the WHERE clause excludes SUBMITTED orders and orders that
+            // already carry a provider order ID.
+            await this.prisma.order.updateMany({
+              where: {
+                id: job.orderId,
+                qikinkOrderId: null,
+                qikinkSyncStatus: { not: QikinkSyncStatus.SUBMITTED },
+              },
               data: {
-                qikinkSyncStatus: 'FAILED',
+                qikinkSyncStatus: QikinkSyncStatus.FAILED,
                 qikinkLastError: message.slice(0, 1000),
               },
             }).catch(() => undefined);

@@ -37,6 +37,7 @@ describe('PaymentsService - Production Safety Audit', () => {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       payment: {
         findFirst: jest.fn(),
@@ -370,6 +371,48 @@ describe('PaymentsService - Production Safety Audit', () => {
         }),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('7b. RETURNED order already PAID -> rejected, no state change, no Qikink enqueue', async () => {
+      // Regression: the already-paid branch used to hand a RETURNED order
+      // straight back to Qikink fulfillment via enqueueOrderSubmission.
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...mockOrder,
+        status: OrderStatus.RETURNED,
+        paymentStatus: PaymentStatus.PAID,
+      });
+
+      await expect(
+        service.verifyPayment({
+          orderId: 'order_123',
+          razorpayOrderId: 'order_rzp_123',
+          razorpayPaymentId: 'pay_rzp_456',
+          razorpaySignature: 'sig',
+        }),
+      ).rejects.toThrow('Cannot verify payment for a cancelled, refunded or returned order');
+
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled(); // markOrderPaid never runs
+      expect(mockQikink.enqueueOrderSubmission).not.toHaveBeenCalled();
+    });
+
+    it('7c. late client callback for a RETURNED order with PENDING payment -> rejected, never marked paid', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...mockOrder,
+        status: OrderStatus.RETURNED,
+        paymentStatus: PaymentStatus.PENDING,
+      });
+
+      await expect(
+        service.verifyPayment({
+          orderId: 'order_123',
+          razorpayOrderId: 'order_rzp_123',
+          razorpayPaymentId: 'pay_rzp_456',
+          razorpaySignature: 'sig',
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(mockQikink.enqueueOrderSubmission).not.toHaveBeenCalled();
+    });
   });
 
   describe('configuration & webhook secret', () => {
@@ -503,6 +546,155 @@ describe('PaymentsService - Production Safety Audit', () => {
       await expect(
         prodService.handleRazorpayWebhook('sig', rawBody, payloadBody),
       ).rejects.toThrow('RAZORPAY_WEBHOOK_SECRET is required in production');
+    });
+
+    it('12. late webhook for a RETURNED order -> ignored, order not reactivated, Qikink not enqueued', async () => {
+      mockPrisma.payment.findFirst.mockResolvedValue(null);
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...mockOrder,
+        status: OrderStatus.RETURNED,
+      });
+
+      const payloadBody = {
+        event: 'payment.captured',
+        payload: {
+          payment: {
+            entity: {
+              id: 'pay_rzp_999',
+              order_id: 'order_rzp_123',
+              amount: 100000,
+              currency: 'INR',
+              status: 'captured',
+              notes: { orderId: 'order_123' },
+            },
+          },
+        },
+      };
+
+      const rawBody = Buffer.from(JSON.stringify(payloadBody));
+      const signature = createHmac('sha256', webhookSecret)
+        .update(rawBody)
+        .digest('hex');
+
+      const res = await service.handleRazorpayWebhook(signature, rawBody, payloadBody);
+
+      expect(res.ignored).toBe(true);
+      expect(res.reason).toBe('order_terminal');
+      // No order mutation of any kind — the RETURNED order must stay untouched
+      expect(mockPrisma.order.updateMany).not.toHaveBeenCalled();
+      expect(mockPrisma.order.update).not.toHaveBeenCalled();
+      expect(mockQikink.enqueueOrderSubmission).not.toHaveBeenCalled();
+    });
+
+    it('13. markOrderPaid only promotes PENDING orders to CONFIRMED and never regresses in-flight orders', async () => {
+      mockPrisma.payment.findFirst.mockResolvedValue(null);
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...mockOrder,
+        status: OrderStatus.SHIPPED, // already in fulfillment
+      });
+
+      const payloadBody = {
+        event: 'payment.captured',
+        payload: {
+          payment: {
+            entity: {
+              id: 'pay_rzp_999',
+              order_id: 'order_rzp_123',
+              amount: 100000,
+              currency: 'INR',
+              status: 'captured',
+              notes: { orderId: 'order_123' },
+            },
+          },
+        },
+      };
+
+      const rawBody = Buffer.from(JSON.stringify(payloadBody));
+      const signature = createHmac('sha256', webhookSecret)
+        .update(rawBody)
+        .digest('hex');
+
+      const res = await service.handleRazorpayWebhook(signature, rawBody, payloadBody);
+      expect(res.matched).toBe(true);
+
+      // Payment recorded as PAID unconditionally...
+      expect(mockPrisma.order.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'order_123' },
+          data: expect.objectContaining({ paymentStatus: PaymentStatus.PAID }),
+        }),
+      );
+      // ...but status promotion is guarded to PENDING orders only, so a SHIPPED
+      // order can never be regressed to CONFIRMED by a late payment callback.
+      expect(mockPrisma.order.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'order_123', status: OrderStatus.PENDING },
+          data: { status: OrderStatus.CONFIRMED },
+        }),
+      );
+    });
+
+    const duplicateWebhookPayload = {
+      event: 'payment.captured',
+      payload: {
+        payment: {
+          entity: {
+            id: 'pay_rzp_999',
+            order_id: 'order_rzp_123',
+            amount: 100000,
+            currency: 'INR',
+            status: 'captured',
+            notes: { orderId: 'order_123' },
+          },
+        },
+      },
+    };
+
+    function signedDuplicateWebhook() {
+      const rawBody = Buffer.from(JSON.stringify(duplicateWebhookPayload));
+      const signature = createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
+      return { rawBody, signature };
+    }
+
+    it('14. duplicate webhook for a RETURNED order -> duplicate+ignored, order untouched, Qikink not re-enqueued', async () => {
+      // Regression: the duplicate short-circuit used to re-enqueue fulfillment
+      // for a terminal order before its status was ever checked.
+      mockPrisma.payment.findFirst.mockResolvedValue({
+        id: 'pay_1',
+        orderId: 'order_123',
+        status: PaymentStatus.PAID,
+        gatewayPaymentId: 'pay_rzp_999',
+        order: { ...mockOrder, status: OrderStatus.RETURNED },
+      });
+
+      const { rawBody, signature } = signedDuplicateWebhook();
+      const res = await service.handleRazorpayWebhook(signature, rawBody, duplicateWebhookPayload);
+
+      expect(res.duplicate).toBe(true);
+      expect(res.ignored).toBe(true);
+      expect(res.reason).toBe('order_terminal');
+      expect(mockPrisma.order.updateMany).not.toHaveBeenCalled();
+      expect(mockPrisma.order.update).not.toHaveBeenCalled();
+      expect(mockQikink.enqueueOrderSubmission).not.toHaveBeenCalled();
+    });
+
+    it('15. duplicate webhook for a non-terminal order still re-enqueues Qikink (duplicate path preserved)', async () => {
+      mockPrisma.payment.findFirst.mockResolvedValue({
+        id: 'pay_1',
+        orderId: 'order_123',
+        status: PaymentStatus.PAID,
+        gatewayPaymentId: 'pay_rzp_999',
+        order: { ...mockOrder, status: OrderStatus.CONFIRMED },
+      });
+
+      const { rawBody, signature } = signedDuplicateWebhook();
+      const res = await service.handleRazorpayWebhook(signature, rawBody, duplicateWebhookPayload);
+
+      expect(res).toEqual({ ok: true, duplicate: true });
+      expect(mockQikink.enqueueOrderSubmission).toHaveBeenCalledWith(
+        'order_123',
+        'webhook_duplicate',
+      );
     });
   });
 });

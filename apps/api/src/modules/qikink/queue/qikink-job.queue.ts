@@ -17,6 +17,15 @@ export class QikinkJobQueue {
     return this.config.get<number>('qikink.maxAttempts') || 8;
   }
 
+  /**
+   * Stale-job timeout: a PROCESSING job whose lock is older than this is
+   * considered abandoned (its worker crashed or stalled) and may be reclaimed.
+   * Default 10 minutes (QIKINK_JOB_LOCK_TIMEOUT_MS).
+   */
+  jobLockTimeoutMs() {
+    return this.config.get<number>('qikink.jobLockTimeoutMs') || 10 * 60 * 1000;
+  }
+
   async enqueue(
     type: QikinkJobType,
     opts: {
@@ -67,33 +76,76 @@ export class QikinkJobQueue {
 
   async claimNext(types?: QikinkJobType[]) {
     const now = new Date();
-    return this.prisma.$transaction(async (tx) => {
-      const job = await tx.qikinkJob.findFirst({
+    const lockCutoff = new Date(now.getTime() - this.jobLockTimeoutMs());
+    // Bounded retries: losing a claim race to another worker should not starve
+    // this worker of other available jobs.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const job = await this.prisma.$transaction(async (tx) => {
+        // Reclaim jobs abandoned by crashed/stalled workers. Guarded by the lock
+        // cutoff, so a live worker's in-flight job is never stolen mid-run.
+        // Execution remains at-least-once; handlers are protected by their own
+        // order-level atomic claims.
+        const reclaimed = await tx.qikinkJob.updateMany({
+          where: {
+            status: QikinkJobStatus.PROCESSING,
+            lockedAt: { lt: lockCutoff },
+          },
+          data: { status: QikinkJobStatus.PENDING, lockedAt: null, lockedBy: null },
+        });
+        if (reclaimed.count) {
+          this.logger.warn(
+            `Reclaimed ${reclaimed.count} stale Qikink job(s) abandoned for over ${this.jobLockTimeoutMs()}ms`,
+          );
+        }
+
+        const candidate = await tx.qikinkJob.findFirst({
+          where: {
+            status: QikinkJobStatus.PENDING,
+            runAfter: { lte: now },
+            ...(types?.length ? { type: { in: types } } : {}),
+          },
+          orderBy: [{ runAfter: 'asc' }, { createdAt: 'asc' }],
+        });
+        if (!candidate) return null;
+        // Guarded PENDING → PROCESSING transition: the WHERE clause re-checks the
+        // status after the row lock is acquired, so exactly one worker can own the
+        // job even when several race for the same candidate.
+        const updated = await tx.qikinkJob.updateMany({
+          where: { id: candidate.id, status: QikinkJobStatus.PENDING },
+          data: {
+            status: QikinkJobStatus.PROCESSING,
+            lockedAt: now,
+            lockedBy: this.workerId,
+            attempts: { increment: 1 },
+          },
+        });
+        if (!updated.count) return null;
+        return tx.qikinkJob.findUnique({ where: { id: candidate.id } });
+      });
+      if (job) return job;
+      // null can mean "queue empty" or "lost a claim race" — only retry when
+      // more claimable jobs exist.
+      const remaining = await this.prisma.qikinkJob.count({
         where: {
           status: QikinkJobStatus.PENDING,
           runAfter: { lte: now },
           ...(types?.length ? { type: { in: types } } : {}),
         },
-        orderBy: [{ runAfter: 'asc' }, { createdAt: 'asc' }],
       });
-      if (!job) return null;
-      const updated = await tx.qikinkJob.updateMany({
-        where: { id: job.id, status: QikinkJobStatus.PENDING },
-        data: {
-          status: QikinkJobStatus.PROCESSING,
-          lockedAt: now,
-          lockedBy: this.workerId,
-          attempts: { increment: 1 },
-        },
-      });
-      if (!updated.count) return null;
-      return tx.qikinkJob.findUnique({ where: { id: job.id } });
-    });
+      if (!remaining) return null;
+    }
+    return null;
   }
 
   async complete(jobId: string, result?: Prisma.InputJsonValue) {
-    return this.prisma.qikinkJob.update({
-      where: { id: jobId },
+    // Ownership guard: if this worker stalled and the job was reclaimed, another
+    // worker may own it now — a late completion must never clobber that state.
+    const res = await this.prisma.qikinkJob.updateMany({
+      where: {
+        id: jobId,
+        status: QikinkJobStatus.PROCESSING,
+        lockedBy: this.workerId,
+      },
       data: {
         status: QikinkJobStatus.COMPLETED,
         result,
@@ -103,6 +155,12 @@ export class QikinkJobQueue {
         error: null,
       },
     });
+    if (!res.count) {
+      this.logger.warn(
+        `Job ${jobId} completion ignored: job is no longer owned by ${this.workerId} (reclaimed or already resolved)`,
+      );
+    }
+    return res;
   }
 
   async fail(
@@ -114,8 +172,14 @@ export class QikinkJobQueue {
   ) {
     const delayMs = Math.min(60 * 60 * 1000, 2 ** Math.min(attempts, 8) * 15_000);
     const dead = isPermanent || attempts >= maxAttempts;
-    return this.prisma.qikinkJob.update({
-      where: { id: jobId },
+    // Same ownership guard as complete(): a stale worker's failure report must
+    // not reset a job another worker currently owns.
+    const res = await this.prisma.qikinkJob.updateMany({
+      where: {
+        id: jobId,
+        status: QikinkJobStatus.PROCESSING,
+        lockedBy: this.workerId,
+      },
       data: {
         status: dead ? QikinkJobStatus.DEAD : QikinkJobStatus.PENDING,
         error,
@@ -125,6 +189,12 @@ export class QikinkJobQueue {
         ...(dead ? { completedAt: new Date() } : {}),
       },
     });
+    if (!res.count) {
+      this.logger.warn(
+        `Job ${jobId} failure ignored: job is no longer owned by ${this.workerId} (reclaimed or already resolved)`,
+      );
+    }
+    return res;
   }
 
   async requeueDead(orderId: string) {

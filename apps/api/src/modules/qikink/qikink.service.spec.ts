@@ -193,22 +193,32 @@ describe('QikinkService - Order Submission Hardening', () => {
     expect(mockTxPrisma.$executeRaw).toHaveBeenCalledTimes(2);
   });
 
-  it('10. Max-attempt limit test - queue fail marks job DEAD when attempts >= maxAttempts', async () => {
+  it('10. Max-attempt limit test - queue fail marks job DEAD when attempts >= maxAttempts (ownership-guarded)', async () => {
     const { QikinkJobQueue } = jest.requireActual('./queue/qikink-job.queue');
     const queue = new QikinkJobQueue(mockPrisma, mockConfig);
-    mockPrisma.qikinkJob = { update: jest.fn().mockResolvedValue({ status: QikinkJobStatus.DEAD }) };
+    mockPrisma.qikinkJob = {
+      update: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    };
 
     await queue.fail('job_1', 'Transient error', 8, 8, false);
 
-    expect(mockPrisma.qikinkJob.update).toHaveBeenCalledWith(
+    // The failure write is guarded by job ownership so a stale worker can never
+    // reset a job that has been reclaimed by another worker.
+    expect(mockPrisma.qikinkJob.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'job_1' },
+        where: expect.objectContaining({
+          id: 'job_1',
+          status: QikinkJobStatus.PROCESSING,
+          lockedBy: expect.any(String),
+        }),
         data: expect.objectContaining({
           status: QikinkJobStatus.DEAD,
           error: 'Transient error',
         }),
       }),
     );
+    expect(mockPrisma.qikinkJob.update).not.toHaveBeenCalled();
   });
 
   it('2. Duplicate submission prevention - skips if qikinkOrderId or SUBMITTED status exists', async () => {
@@ -243,7 +253,7 @@ describe('QikinkService - Order Submission Hardening', () => {
     ]);
 
     // One succeeds, the other is skipped due to concurrent processing
-    const results = [res1, res2];
+    const results: any[] = [res1, res2];
     const successResult = results.find((r) => r.success);
     const skippedResult = results.find((r) => r.skipped);
 
@@ -368,6 +378,21 @@ describe('QikinkService - Order Submission Hardening', () => {
         }),
       }),
     );
+  });
+
+  it('8b. enqueueOrderSubmission refuses terminal orders (CANCELLED/REFUNDED/RETURNED): no state change, no job', async () => {
+    for (const status of ['CANCELLED', 'REFUNDED', 'RETURNED']) {
+      mockPrisma.order.findUnique.mockResolvedValue({ ...baseOrder, status });
+      mockPrisma.order.update.mockClear();
+      mockQueue.enqueue.mockClear();
+
+      const res = await service.enqueueOrderSubmission('order_1', 'payment_callback');
+
+      expect(res).toEqual({ queued: false, reason: 'order_terminal', status });
+      // No qikinkSyncStatus overwrite on a terminal order, no queue job
+      expect(mockPrisma.order.update).not.toHaveBeenCalled();
+      expect(mockQueue.enqueue).not.toHaveBeenCalled();
+    }
   });
 
   describe('Phase 8: Order Status Polling & Webhook Handling', () => {
@@ -733,6 +758,127 @@ describe('QikinkService - Order Submission Hardening', () => {
       });
 
       expect(mockPrisma.orderStatusHistory.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('concurrent claims, uncertain responses & crash-recovery reconciliation', () => {
+    it('P9-1. Losing the atomic submission claim skips without submitting', async () => {
+      mockPrisma.order.findUnique
+        .mockResolvedValueOnce(baseOrder)
+        .mockResolvedValueOnce({ ...baseOrder, qikinkSyncStatus: QikinkSyncStatus.SUBMITTING });
+      mockPrisma.order.updateMany.mockResolvedValue({ count: 0 });
+
+      const res = await service.processSubmitJob('order_1');
+
+      expect(res).toEqual({ skipped: true, reason: 'concurrent_submission_in_progress' });
+      expect(mockClient.createOrder).not.toHaveBeenCalled();
+    });
+
+    it('P9-2. A RETURNED order is never submitted to Qikink (fulfillment terminal guard)', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({ ...baseOrder, status: 'RETURNED' });
+
+      const res = await service.processSubmitJob('order_1');
+
+      expect(res).toEqual({ skipped: true, reason: 'cancelled' });
+      expect(mockClient.createOrder).not.toHaveBeenCalled();
+      expect(mockPrisma.order.update).toHaveBeenCalledWith({
+        where: { id: 'order_1' },
+        data: { qikinkSyncStatus: QikinkSyncStatus.CANCELLED },
+      });
+    });
+
+    it('P9-3. Provider response without order_id stays retryable (uncertain submission, not FAILED)', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue(baseOrder);
+      mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
+      mockClient.createOrder.mockResolvedValue({ message: 'accepted' }); // no order_id
+
+      let caught: any = null;
+      await service.processSubmitJob('order_1').catch((err) => (caught = err));
+
+      expect(caught).toBeInstanceOf(Error);
+      expect(caught.isUncertain).toBe(true);
+      expect(caught.isPermanent).toBeUndefined();
+      // Retryable state so the next attempt can reconcile via the status probe
+      const calls = mockPrisma.order.update.mock.calls;
+      const lastUpdate = calls[calls.length - 1][0];
+      expect(lastUpdate.data.qikinkSyncStatus).toBe(QikinkSyncStatus.QUEUED);
+      const auditCalls = mockPrisma.auditLog.create.mock.calls;
+      const lastAudit = auditCalls[auditCalls.length - 1][0];
+      expect(lastAudit.data.metadata.uncertain).toBe(true);
+      expect(lastAudit.data.metadata.permanent).toBe(false);
+    });
+
+    it('P9-4. Reconciliation adopts an existing provider order instead of double-submitting', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        qikinkAttempts: 1,
+        qikinkOrderNumber: 'VYQ10001',
+      });
+      mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
+      mockClient.getOrderStatus.mockResolvedValue({ order_id: 'QIK777', status: 'confirmed' });
+
+      const res = await service.processSubmitJob('order_1');
+
+      expect(res).toEqual({
+        success: true,
+        qikinkOrderId: 'QIK777',
+        reconciled: true,
+        response: { order_id: 'QIK777', status: 'confirmed' },
+      });
+      // The provider already accepted this order — never create a duplicate
+      expect(mockClient.createOrder).not.toHaveBeenCalled();
+      // Adopted provider ID with SUBMITTED sync state
+      const adoptUpdate = mockPrisma.order.update.mock.calls.find(
+        (c: any[]) => c[0]?.data?.qikinkOrderId === 'QIK777',
+      );
+      expect(adoptUpdate).toBeDefined();
+      expect(adoptUpdate![0].data.qikinkSyncStatus).toBe(QikinkSyncStatus.SUBMITTED);
+      expect(mockPrisma.orderStatusHistory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            note: expect.stringContaining('Reconciled interrupted Qikink submission'),
+          }),
+        }),
+      );
+    });
+
+    it('P9-5. Probe finding nothing proceeds with a normal submission', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        qikinkAttempts: 1,
+        qikinkOrderNumber: 'VYQ10001',
+      });
+      mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
+      mockClient.getOrderStatus.mockResolvedValue(null);
+      mockClient.createOrder.mockResolvedValue({ order_id: 'QIK900', message: 'Success' });
+
+      const res = await service.processSubmitJob('order_1');
+
+      expect(mockClient.getOrderStatus).toHaveBeenCalledTimes(1);
+      expect(mockClient.createOrder).toHaveBeenCalledTimes(1);
+      expect(res).toEqual({
+        success: true,
+        qikinkOrderId: 'QIK900',
+        response: { order_id: 'QIK900', message: 'Success' },
+      });
+    });
+
+    it('P9-6. Probe errors (status endpoint unavailable) degrade to plain submission', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        qikinkAttempts: 2,
+        qikinkOrderNumber: 'VYQ10001',
+      });
+      mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
+      mockClient.getOrderStatus.mockRejectedValue(new Error('status endpoint down'));
+      mockClient.createOrder.mockResolvedValue({ order_id: 'QIK901', message: 'Success' });
+
+      const res = await service.processSubmitJob('order_1');
+
+      expect(res).toEqual(
+        expect.objectContaining({ success: true, qikinkOrderId: 'QIK901' }),
+      );
+      expect(mockClient.createOrder).toHaveBeenCalledTimes(1);
     });
   });
 });

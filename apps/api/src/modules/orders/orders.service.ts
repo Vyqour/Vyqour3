@@ -15,6 +15,36 @@ import { generateOrderNumber } from '../../common/utils/slug.util';
 import { CreateOrderDto, OrderQueryDto, UpdateOrderStatusDto } from './dto/order.dto';
 import { QikinkService } from '../qikink/qikink.service';
 
+/**
+ * Allowed order status transitions.
+ * CANCELLED and REFUNDED are terminal: no outgoing transitions exist, so no
+ * status-update path (admin, webhook, fulfillment) can ever reactivate them.
+ * RETURNED can only move to REFUNDED (the return-refund workflow).
+ */
+export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.CANCELLED],
+  [OrderStatus.CONFIRMED]: [OrderStatus.PROCESSING, OrderStatus.SHIPPED, OrderStatus.CANCELLED],
+  [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
+  [OrderStatus.SHIPPED]: [
+    OrderStatus.OUT_FOR_DELIVERY,
+    OrderStatus.DELIVERED,
+    OrderStatus.RETURNED,
+    OrderStatus.CANCELLED,
+  ],
+  [OrderStatus.OUT_FOR_DELIVERY]: [OrderStatus.DELIVERED, OrderStatus.RETURNED, OrderStatus.CANCELLED],
+  [OrderStatus.DELIVERED]: [OrderStatus.RETURNED, OrderStatus.REFUNDED],
+  [OrderStatus.RETURNED]: [OrderStatus.REFUNDED],
+  [OrderStatus.CANCELLED]: [],
+  [OrderStatus.REFUNDED]: [],
+};
+
+/** Statuses that must never transition back into an active state. */
+export const TERMINAL_ORDER_STATUSES: OrderStatus[] = [
+  OrderStatus.CANCELLED,
+  OrderStatus.REFUNDED,
+  OrderStatus.RETURNED,
+];
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -97,13 +127,21 @@ export class OrdersService {
         },
       });
 
-      // Decrement stock
+      // Decrement stock atomically, conditional on sufficient remaining stock.
+      // The WHERE predicate re-checks stock after the row lock is acquired, so
+      // two concurrent checkouts can never both claim the last available units:
+      // the loser's guarded update matches no row, this transaction throws, and
+      // the entire checkout (order, items, payment, history) rolls back.
+      // Stock can never go negative.
       for (const item of cart.items) {
         if (item.variantId) {
-          await tx.productVariant.update({
-            where: { id: item.variantId },
+          const decremented = await tx.productVariant.updateMany({
+            where: { id: item.variantId, stock: { gte: item.quantity } },
             data: { stock: { decrement: item.quantity } },
           });
+          if (!decremented.count) {
+            throw new BadRequestException(`Insufficient stock for ${item.product.name}`);
+          }
         }
         await tx.product.update({
           where: { id: item.productId },
@@ -112,10 +150,26 @@ export class OrdersService {
       }
 
       if (summary.couponCode) {
-        await tx.coupon.updateMany({
-          where: { code: summary.couponCode },
+        // Atomically claim one coupon usage inside the checkout transaction.
+        // The WHERE predicate re-checks the limit after the row lock is acquired,
+        // so two concurrent checkouts can never both claim the last available use.
+        // A null usageLimit means unlimited usage. Any failure later in this
+        // transaction rolls the claim back automatically.
+        const coupon = await tx.coupon.findUnique({ where: { code: summary.couponCode } });
+        if (!coupon || !coupon.isActive) {
+          throw new BadRequestException('Invalid coupon');
+        }
+        const claimed = await tx.coupon.updateMany({
+          where: {
+            code: summary.couponCode,
+            isActive: true,
+            ...(coupon.usageLimit != null ? { usageCount: { lt: coupon.usageLimit } } : {}),
+          },
           data: { usageCount: { increment: 1 } },
         });
+        if (!claimed.count) {
+          throw new BadRequestException('Coupon usage limit reached');
+        }
       }
 
       // Clear cart
@@ -227,11 +281,33 @@ this.mail
   }
 
   async updateStatus(id: string, dto: UpdateOrderStatusDto, adminId: string) {
-    const order = await this.prisma.order.findUnique({ where: { id } });
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: { items: true },
+    });
     if (!order) throw new NotFoundException('Order not found');
     const status = dto.status as OrderStatus;
     if (!Object.values(OrderStatus).includes(status)) {
       throw new BadRequestException('Invalid status');
+    }
+
+    // Repeated transition to the same status: refresh tracking fields only.
+    // Never creates a duplicate status-history entry.
+    if (status === order.status) {
+      const trackingOnly: Prisma.OrderUpdateInput = {};
+      if (dto.trackingNumber) trackingOnly.trackingNumber = dto.trackingNumber;
+      if (dto.carrier) trackingOnly.carrier = dto.carrier;
+      if (Object.keys(trackingOnly).length) {
+        await this.prisma.order.update({ where: { id }, data: trackingOnly });
+      }
+      return this.findOne(id, undefined, true);
+    }
+
+    const allowedTargets = ORDER_STATUS_TRANSITIONS[order.status] ?? [];
+    if (!allowedTargets.includes(status)) {
+      throw new BadRequestException(
+        `Invalid status transition: ${order.status} → ${status}`,
+      );
     }
 
     const data: Prisma.OrderUpdateInput = { status };
@@ -245,53 +321,79 @@ this.mail
     }
     if (status === OrderStatus.CANCELLED) data.cancelledAt = new Date();
 
-    await this.prisma.$transaction([
-      this.prisma.order.update({ where: { id }, data }),
-      this.prisma.orderStatusHistory.create({
+    await this.prisma.$transaction(async (tx) => {
+      // Atomic transition guard: the WHERE clause re-checks the status after the
+      // row lock is acquired, so concurrent updates can never bypass the
+      // transition map or double-apply side effects (restock / history).
+      const updated = await tx.order.updateMany({
+        where: { id, status: order.status },
+        data,
+      });
+      if (!updated.count) {
+        throw new BadRequestException(
+          'Order status changed concurrently — refresh and retry',
+        );
+      }
+      if (status === OrderStatus.CANCELLED) {
+        // Restore inventory as part of the same transaction so cancellation is
+        // transactionally consistent and can never restock twice.
+        for (const item of order.items) {
+          if (item.variantId) {
+            await tx.productVariant.update({
+              where: { id: item.variantId },
+              data: { stock: { increment: item.quantity } },
+            });
+          }
+        }
+      }
+      await tx.orderStatusHistory.create({
         data: {
           orderId: id,
           status,
           note: dto.note,
           createdBy: adminId,
         },
-      }),
-    ]);
+      });
+    });
     return this.findOne(id, undefined, true);
   }
 
   async cancel(id: string, userId: string, reason?: string) {
     const order = await this.findOne(id, userId);
     const cancellable: OrderStatus[] = [OrderStatus.PENDING, OrderStatus.CONFIRMED];
-    if (!cancellable.includes(order.status)) {
-      throw new BadRequestException('Order cannot be cancelled at this stage');
-    }
-    await this.prisma.$transaction([
-      this.prisma.order.update({
-        where: { id: order.id },
+    await this.prisma.$transaction(async (tx) => {
+      // Atomic guard: a repeated or concurrent cancel finds no row matching the
+      // cancellable statuses, so it cannot restock or write history twice.
+      const updated = await tx.order.updateMany({
+        where: { id: order.id, userId, status: { in: cancellable } },
         data: {
           status: OrderStatus.CANCELLED,
           cancelledAt: new Date(),
           cancelReason: reason,
         },
-      }),
-      this.prisma.orderStatusHistory.create({
+      });
+      if (!updated.count) {
+        throw new BadRequestException('Order cannot be cancelled at this stage');
+      }
+      // Restock inside the same transaction so a failed cancel rolls back the
+      // inventory change.
+      for (const item of order.items) {
+        if (item.variantId) {
+          await tx.productVariant.update({
+            where: { id: item.variantId },
+            data: { stock: { increment: item.quantity } },
+          });
+        }
+      }
+      await tx.orderStatusHistory.create({
         data: {
           orderId: order.id,
           status: OrderStatus.CANCELLED,
           note: reason || 'Cancelled by customer',
           createdBy: userId,
         },
-      }),
-    ]);
-    // Restock
-    for (const item of order.items) {
-      if (item.variantId) {
-        await this.prisma.productVariant.update({
-          where: { id: item.variantId },
-          data: { stock: { increment: item.quantity } },
-        });
-      }
-    }
+      });
+    });
     return this.findOne(order.id, userId);
   }
 

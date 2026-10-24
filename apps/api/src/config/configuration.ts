@@ -83,6 +83,7 @@ export default () => ({
     webhookSecret: process.env.QIKINK_WEBHOOK_SECRET || '',
     autoSubmit: (process.env.QIKINK_AUTO_SUBMIT || 'true').toLowerCase() === 'true',
     maxAttempts: parseInt(process.env.QIKINK_MAX_ATTEMPTS || '8', 10),
+    jobLockTimeoutMs: parseInt(process.env.QIKINK_JOB_LOCK_TIMEOUT_MS || '600000', 10),
     workerIntervalMs: parseInt(process.env.QIKINK_WORKER_INTERVAL_MS || '15000', 10),
     statusPollEnabled:
       (process.env.QIKINK_STATUS_POLL_ENABLED || 'true').toLowerCase() === 'true',

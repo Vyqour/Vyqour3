@@ -10,6 +10,7 @@ import { OrderStatus, PaymentMethod, PaymentStatus } from '@prisma/client';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QikinkService } from '../qikink/qikink.service';
+import { TERMINAL_ORDER_STATUSES } from '../orders/orders.service';
 
 /**
  * Razorpay-ready payment service with webhook verification + Qikink handoff.
@@ -150,8 +151,13 @@ export class PaymentsService {
     });
     if (!order) throw new BadRequestException('Order not found');
 
-    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) {
-      throw new BadRequestException('Cannot verify payment for cancelled or refunded order');
+    // Terminal orders must never be verified or re-enqueued for fulfillment.
+    // A late client callback for a RETURNED order would otherwise mark it PAID
+    // and (via the already-paid branch) hand it straight back to Qikink.
+    if (TERMINAL_ORDER_STATUSES.includes(order.status)) {
+      throw new BadRequestException(
+        'Cannot verify payment for a cancelled, refunded or returned order',
+      );
     }
 
     if (order.paymentStatus === PaymentStatus.PAID) {
@@ -322,8 +328,23 @@ export class PaymentsService {
     if (gatewayPaymentId) {
       const existing = await this.prisma.payment.findFirst({
         where: { gatewayPaymentId },
+        include: { order: true },
       });
       if (existing?.status === PaymentStatus.PAID) {
+        // A duplicate webhook must never re-enqueue fulfillment for a terminal
+        // (cancelled / refunded / returned) order.
+        if (existing.order && TERMINAL_ORDER_STATUSES.includes(existing.order.status)) {
+          this.logger.warn(
+            `Razorpay duplicate webhook ignored for terminal order ${existing.orderId} (status=${existing.order.status})`,
+          );
+          return {
+            ok: true,
+            duplicate: true,
+            ignored: true,
+            reason: 'order_terminal',
+            status: existing.order.status,
+          };
+        }
         await this.qikink
           .enqueueOrderSubmission(existing.orderId, 'webhook_duplicate')
           .catch(() => undefined);
@@ -363,9 +384,13 @@ export class PaymentsService {
       return { ok: true, ignored: true, event };
     }
 
-    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) {
-      this.logger.warn(`Razorpay webhook ignored for cancelled/refunded order ${order.id}`);
-      return { ok: true, ignored: true, reason: 'order_cancelled_or_refunded' };
+    if (TERMINAL_ORDER_STATUSES.includes(order.status)) {
+      // Late/duplicate webhooks must never reactivate a cancelled, refunded or
+      // returned order.
+      this.logger.warn(
+        `Razorpay webhook ignored for terminal order ${order.id} (status=${order.status})`,
+      );
+      return { ok: true, ignored: true, reason: 'order_terminal', status: order.status };
     }
 
     // Webhook Amount & Currency Validation
@@ -404,17 +429,25 @@ export class PaymentsService {
       source: string;
     },
   ) {
-    await this.prisma.$transaction([
-      this.prisma.order.update({
+    await this.prisma.$transaction(async (tx) => {
+      // The money moved, so record the payment as PAID unconditionally — but
+      // never let a late callback reactivate a terminal order or regress one
+      // already in fulfillment.
+      await tx.order.updateMany({
         where: { id: orderId },
         data: {
           paymentStatus: PaymentStatus.PAID,
-          status: OrderStatus.CONFIRMED,
           paymentId: meta.paymentId,
           paymentGatewayRef: meta.gatewayOrderId,
         },
-      }),
-      this.prisma.payment.updateMany({
+      });
+      // Promote to CONFIRMED only from PENDING; terminal and in-flight states
+      // keep their status.
+      const promoted = await tx.order.updateMany({
+        where: { id: orderId, status: OrderStatus.PENDING },
+        data: { status: OrderStatus.CONFIRMED },
+      });
+      await tx.payment.updateMany({
         where: { orderId },
         data: {
           status: PaymentStatus.PAID,
@@ -424,23 +457,25 @@ export class PaymentsService {
           paidAt: new Date(),
           metadata: { source: meta.source },
         },
-      }),
-      this.prisma.orderStatusHistory.create({
-        data: {
-          orderId,
-          status: OrderStatus.CONFIRMED,
-          note: `Payment verified (${meta.source})`,
-          createdBy: 'payments',
-        },
-      }),
-      this.prisma.auditLog.create({
+      });
+      if (promoted.count) {
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId,
+            status: OrderStatus.CONFIRMED,
+            note: `Payment verified (${meta.source})`,
+            createdBy: 'payments',
+          },
+        });
+      }
+      await tx.auditLog.create({
         data: {
           action: 'PAYMENT_PAID',
           entity: 'Order',
           entityId: orderId,
-          metadata: meta as object,
+          metadata: { ...meta, statusPromoted: promoted.count > 0 } as object,
         },
-      }),
-    ]);
+      });
+    });
   }
 }

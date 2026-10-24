@@ -48,8 +48,13 @@ $ npm run start:prod
 ## Run tests
 
 ```bash
-# unit tests
-$ npm run test
+# unit tests (mocked Prisma; no database required)
+$ npm run test:unit
+
+# PostgreSQL integration tests (requires a reachable DATABASE_URL with the
+# schema applied: npx prisma db push). Runs src/**/*.integration-spec.ts
+# serially (--runInBand).
+$ npm run test:integration
 
 # e2e tests
 $ npm run test:e2e
@@ -57,6 +62,13 @@ $ npm run test:e2e
 # test coverage
 $ npm run test:cov
 ```
+
+Unit tests are `src/**/*.spec.ts` and never connect to the database.
+PostgreSQL integration tests are named `src/**/*.integration-spec.ts` and run
+serially against the database in `DATABASE_URL`. CI runs the two suites in
+separate jobs: `unit-tests` has no database service, while `integration-tests`
+starts a PostgreSQL service container, pushes the Prisma schema, and runs
+`npm run test:integration`.
 
 ## Deployment
 

@@ -36,8 +36,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
         error = (body.error as string) || exception.name;
       }
     } else if (exception instanceof Error) {
-      message = exception.message;
+      // Unexpected internal error: log full diagnostics server-side, but never
+      // leak raw error details (database errors, internals, secrets) to clients.
       this.logger.error(exception.message, exception.stack);
+      message = 'Internal server error';
+    } else {
+      // Thrown non-Error values can also carry sensitive data — log and genericize.
+      this.logger.error('Non-Error exception thrown', String(exception));
+      message = 'Internal server error';
     }
 
     response.status(status).json({
