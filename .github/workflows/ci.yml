@@ -7,7 +7,39 @@ on:
     branches: ["**"]
 
 jobs:
-  test-and-build:
+  unit-tests:
+    runs-on: ubuntu-latest
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vyqour_test?sslmode=disable
+      JWT_ACCESS_SECRET: ci_test_jwt_access_secret_32chars_long
+      JWT_REFRESH_SECRET: ci_test_jwt_refresh_secret_32chars_long
+      QIKINK_ENABLED: "true"
+      QIKINK_SANDBOX: "true"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npm run db:generate
+
+      # Unit tests (src/**/*.spec.ts) use mocked Prisma and never connect to
+      # PostgreSQL, so this job intentionally has no database service.
+      - name: Run API unit tests (no database required)
+        run: npm run test:unit --workspace=@vyqour/api
+
+  integration-tests:
     runs-on: ubuntu-latest
 
     services:
@@ -52,9 +84,29 @@ jobs:
       - name: Push Prisma schema to test database
         run: cd apps/api && npx prisma db push
 
-      - name: Run Phase 8 Unit & PostgreSQL Concurrency Integration Tests
-        run: |
-          cd apps/api && npx jest --testRegex=".*\\.(spec|integration-spec)\\.ts$" src/modules/qikink/qikink.service.spec.ts src/modules/qikink/qikink-order.mapper.spec.ts src/modules/qikink/qikink-concurrency.integration-spec.ts src/modules/payments/payments.service.spec.ts
+      # Runs every src/**/*.integration-spec.ts (checkout, Qikink concurrency,
+      # stock concurrency) serially against the PostgreSQL service.
+      - name: Run PostgreSQL integration tests
+        run: npm run test:integration --workspace=@vyqour/api
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npm run db:generate
 
       - name: Build API
         run: npm run build:api

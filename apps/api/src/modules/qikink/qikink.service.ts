@@ -72,6 +72,19 @@ export class QikinkService {
       return { queued: false, reason: 'already_submitted', qikinkOrderId: order.qikinkOrderId };
     }
 
+    // Terminal orders must never be queued for fulfillment, whatever path calls
+    // us (payment callback, webhook, COD confirmation, cron, admin).
+    if (
+      order.status === OrderStatus.CANCELLED ||
+      order.status === OrderStatus.REFUNDED ||
+      order.status === OrderStatus.RETURNED
+    ) {
+      this.logger.warn(
+        `Qikink submit skipped (order terminal) order=${orderId} status=${order.status} reason=${reason}`,
+      );
+      return { queued: false, reason: 'order_terminal', status: order.status };
+    }
+
     // Prepaid must be PAID before Qikink submission
     if (order.paymentMethod !== PaymentMethod.COD && order.paymentStatus !== PaymentStatus.PAID) {
       await this.prisma.order.update({
@@ -148,7 +161,11 @@ export class QikinkService {
       return { skipped: true, reason: 'awaiting_payment' };
     }
 
-    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) {
+    if (
+      order.status === OrderStatus.CANCELLED ||
+      order.status === OrderStatus.REFUNDED ||
+      order.status === OrderStatus.RETURNED
+    ) {
       await this.prisma.order.update({
         where: { id: orderId },
         data: { qikinkSyncStatus: QikinkSyncStatus.CANCELLED },
@@ -215,16 +232,36 @@ export class QikinkService {
      * Note: Qikink's public create-order API endpoint accepts order_number, line_items, shipping_address, total_order_value, and gateway.
      * It does not accept a custom client idempotency_key parameter in the API body/header.
      * We use `order.qikinkIdempotencyKey` locally for internal job queue deduplication and atomic worker locks to prevent double-submitting.
-     * If worker crashes after Qikink accepts the order but before saving qikinkOrderId locally, the retry will attempt submit with the same order_number.
+     * If worker crashes after Qikink accepts the order but before saving qikinkOrderId locally, the retry will first probe the
+     * status endpoint with our deterministic order_number and adopt an existing provider order instead of re-submitting
+     * (see reconcilePriorSubmission below). RESIDUAL RISK: if the status endpoint lags or is unavailable at retry time,
+     * a duplicate submission is still possible — Qikink-side dedup by order_number is not documented and cannot be assumed.
      */
+
+    // Crash-recovery reconciliation: a prior attempt may have reached Qikink
+    // (provider accepted) but crashed before qikinkOrderId was saved locally.
+    if ((order.qikinkAttempts ?? 0) >= 1) {
+      const priorAttempts = order.qikinkAttempts ?? 0;
+      const reconciled = await this.reconcilePriorSubmission(
+        orderId,
+        order.qikinkOrderNumber || String(payload.order_number),
+        priorAttempts,
+        order.status,
+      );
+      if (reconciled) return reconciled;
+    }
+
     try {
       const response = await this.client.createOrder(payload, orderId);
       const qikinkOrderId = response.order_id != null ? String(response.order_id) : null;
       if (!qikinkOrderId) {
+        // Provider response is UNCERTAIN: the order may or may not have been
+        // created. Do NOT mark this permanently failed — keep it retryable so the
+        // next attempt can reconcile via the status endpoint.
         const err = new Error(
-          `Qikink create order succeeded without order_id: ${JSON.stringify(response)}`,
+          `Qikink create order succeeded without order_id (submission uncertain): ${JSON.stringify(response)}`,
         );
-        (err as any).isPermanent = true;
+        (err as any).isUncertain = true;
         throw err;
       }
 
@@ -295,7 +332,11 @@ export class QikinkService {
           action: 'QIKINK_ORDER_SUBMIT_FAILED',
           entity: 'Order',
           entityId: orderId,
-          metadata: { error: message.slice(0, 500), permanent: isPermanent },
+          metadata: {
+            error: message.slice(0, 500),
+            permanent: isPermanent,
+            uncertain: (err as any).isUncertain === true,
+          },
         },
       });
       if (isPermanent) {
@@ -303,6 +344,85 @@ export class QikinkService {
       }
       throw err;
     }
+  }
+
+  /**
+   * Crash-recovery reconciliation for interrupted submissions.
+   *
+   * A prior attempt incremented qikinkAttempts and may have reached Qikink
+   * before crashing. Because Qikink exposes no idempotency-key support, the
+   * safest available strategy before re-submitting is to probe the status
+   * endpoint with our deterministic order_number:
+   *  - If Qikink already knows the order, adopt its order_id (mark SUBMITTED)
+   *    instead of creating a duplicate fulfillment.
+   *  - If the probe finds nothing (null / not found), we proceed with a normal
+   *    submission — accepting residual uncertainty documented above.
+   * The probe swallows provider errors and returns null, so an unavailable
+   * status endpoint degrades to the previous retry behavior.
+   */
+  private async reconcilePriorSubmission(
+    orderId: string,
+    orderNumber: string,
+    priorAttempts: number,
+    currentStatus: OrderStatus,
+  ) {
+    let status: Awaited<ReturnType<typeof this.client.getOrderStatus>> = null;
+    try {
+      status = await this.client.getOrderStatus({ orderNumber, internalOrderId: orderId });
+    } catch {
+      status = null;
+    }
+    const providerOrderId =
+      status && typeof status === 'object' && status.order_id != null
+        ? String(status.order_id)
+        : null;
+    if (!status || !providerOrderId) {
+      this.logger.debug(
+        `Qikink reconcile: no provider order found for ${orderNumber} after ${priorAttempts} attempt(s) — proceeding with submission`,
+      );
+      return null;
+    }
+    const resolved = status;
+
+    await this.prisma.$transaction([
+      this.prisma.order.update({
+        where: { id: orderId },
+        data: {
+          qikinkOrderId: providerOrderId,
+          qikinkStatus: resolved.status || resolved.order_status || 'submitted',
+          qikinkSyncStatus: QikinkSyncStatus.SUBMITTED,
+          qikinkSyncedAt: new Date(),
+          qikinkResponse: resolved as object,
+          qikinkLastError: null,
+        },
+      }),
+      this.prisma.orderStatusHistory.create({
+        data: {
+          orderId,
+          status: currentStatus,
+          note: `Reconciled interrupted Qikink submission (provider ID ${providerOrderId}, attempts so far ${priorAttempts})`,
+          createdBy: 'qikink',
+        },
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          action: 'QIKINK_ORDER_RECONCILED',
+          entity: 'Order',
+          entityId: orderId,
+          metadata: { providerOrderId, orderNumber, priorAttempts },
+        },
+      }),
+    ]);
+
+    this.logger.warn(
+      `Qikink reconcile: adopted existing provider order ${providerOrderId} for ${orderNumber} after interrupted submission (attempts=${priorAttempts})`,
+    );
+    return {
+      success: true,
+      qikinkOrderId: providerOrderId,
+      reconciled: true,
+      response: resolved,
+    };
   }
 
   async processStatusSync(orderId: string) {
