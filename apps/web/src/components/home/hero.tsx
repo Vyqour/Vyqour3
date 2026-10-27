@@ -38,7 +38,7 @@ export function Hero() {
             transition={{ delay: 0.12 }}
             className="mt-6 max-w-md text-base leading-relaxed text-muted-foreground"
           >
-            Vyqour is a modern lifestyle and fashion brand that creates premium clothing and accessories designed to help people express their identity, confidence, and individuality.
+            Wear what feels like you. From everyday favourites to standout pieces, VYQOUR is made for your style, your confidence, and your story.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -48,7 +48,7 @@ export function Hero() {
           >
             <Button asChild size="lg">
               <Link href="/shop">
-                Shop Collection <ArrowRight className="h-4 w-4" />
+                Find Your Style <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
             <Button asChild variant="secondary" size="lg">
@@ -66,7 +66,7 @@ export function Hero() {
               <p>GSM fabrics</p>
             </div>
             <div>
-              <p className="text-xl font-medium text-white">₹499+</p>
+              <p className="text-xl font-medium text-white">499+</p>
               <p>Free shipping</p>
             </div>
             <div>
@@ -100,7 +100,7 @@ export function Hero() {
             </div>
             <div>
               <p className="text-lg font-medium">Identity Heavy Hoodie</p>
-              <p className="mt-1 text-sm text-muted-foreground">From ₹3,499 · 450 GSM</p>
+              <p className="mt-1 text-sm text-muted-foreground">From 3,499 · 450 GSM</p>
             </div>
           </div>
         </motion.div>
