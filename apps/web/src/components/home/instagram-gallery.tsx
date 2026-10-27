@@ -13,7 +13,7 @@ export function InstagramGallery() {
         title="On the feed"
         description="Tag us wearing your identity."
       />
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-3">
+      <div className="mx-auto grid max-w-4xl grid-cols-2 gap-2 md:grid-cols-3 md:gap-3">
         {tiles.map((t) => (
           <div
             key={t.id}
