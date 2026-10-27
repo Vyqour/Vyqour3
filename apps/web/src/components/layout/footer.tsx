@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Camera, Mail, MapPin } from 'lucide-react';
+import { Instagram, Mail, MapPin } from 'lucide-react';
 import { NewsletterForm } from '@/components/home/newsletter-form';
 
 const shop = [
@@ -36,8 +36,7 @@ export function Footer() {
             </Link>
             <p className="mt-3 text-sm text-muted-foreground">Wear Your Identity.</p>
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted-foreground">
-              Premium print-on-demand fashion for India&apos;s next generation. Designed with intent.
-              Delivered with care.
+              Your style, your story. Everyday favourites and standout pieces made to feel like you.
             </p>
             <div className="mt-6 flex flex-col gap-2 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-2">
@@ -54,7 +53,7 @@ export function Footer() {
               className="mt-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 transition hover:border-primary/50 hover:text-primary-glow"
               aria-label="Instagram"
             >
-              <Camera className="h-4 w-4" />
+              <Instagram className="h-4 w-4" />
             </a>
           </div>
 
@@ -110,7 +109,7 @@ export function Footer() {
 
         <div className="mt-16 flex flex-col gap-3 border-t border-white/5 pt-8 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} VYQOUR. All rights reserved.</p>
-          <p>Crafted in India · Prices in INR (₹)</p>
+          <p>Crafted in India · Prices are in Indian Rupees (₹)</p>
         </div>
       </div>
     </footer>
