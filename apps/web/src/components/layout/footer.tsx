@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Instagram, Mail, MapPin } from 'lucide-react';
+import { Mail, MapPin } from 'lucide-react';
 import { NewsletterForm } from '@/components/home/newsletter-form';
 
 const shop = [
@@ -53,7 +53,18 @@ export function Footer() {
               className="mt-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 transition hover:border-primary/50 hover:text-primary-glow"
               aria-label="Instagram"
             >
-              <Instagram className="h-4 w-4" />
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="5" />
+                <circle cx="12" cy="12" r="4" />
+                <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+              </svg>
             </a>
           </div>
 
