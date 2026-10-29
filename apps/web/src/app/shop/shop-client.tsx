@@ -122,15 +122,6 @@ export function ShopClient() {
     return roots;
   }, [params.collection, roots]);
 
-  const setDepartment = (slug: string) => {
-    const q = new URLSearchParams(sp.toString());
-    if (slug) q.set('collection', slug);
-    else q.delete('collection');
-    q.delete('category');
-    q.delete('page');
-    router.push(`/shop?${q.toString()}`);
-  };
-
   const setCategory = (slug: string) => {
     const q = new URLSearchParams(sp.toString());
     if (slug) q.set('category', slug);
