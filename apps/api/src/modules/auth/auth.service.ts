@@ -189,7 +189,8 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
     });
-    // Always return success to prevent email enumeration
+
+    // Keep the same response for known and unknown emails to prevent account enumeration.
     if (user) {
       const token = randomBytes(32).toString('hex');
       await this.prisma.passwordResetToken.create({
@@ -199,10 +200,18 @@ export class AuthService {
           expiresAt: new Date(Date.now() + 60 * 60 * 1000),
         },
       });
-      // Fire-and-forget: don't make the user wait on SMTP for this response
-      this.mail.sendPasswordResetEmail(user.email, token).catch(() => undefined);
+
+      // Await the mail provider so delivery failures are detected internally.
+      // Never expose account existence or delivery status in the public response.
+      const delivered = await this.mail.sendPasswordResetEmail(user.email, token);
+      if (!delivered) {
+        await this.prisma.passwordResetToken.delete({ where: { token } });
+      }
     }
-    return { message: 'If that email exists, a reset link has been sent' };
+
+    return {
+      message: 'If an account exists, a reset link will be sent when email delivery is available.',
+    };
   }
 
   async resetPassword(dto: ResetPasswordDto) {
