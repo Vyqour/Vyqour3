@@ -123,3 +123,15 @@ body {
   outline: 2px solid #5b21b6;
   outline-offset: 2px;
 }
+
+
+/* Keep native dropdown controls away from container edges and add breathing room below. */
+select {
+  max-width: calc(100% - 0.5rem);
+  margin-left: -0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+select.input-field {
+  box-sizing: border-box;
+}
