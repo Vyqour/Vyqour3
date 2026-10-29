@@ -24,7 +24,7 @@ export class MailService {
         socketTimeout: 15_000,
       });
     } else {
-      this.logger.warn('SMTP not configured — emails will be logged only');
+      this.logger.warn('SMTP not configured — outgoing emails are disabled');
     }
   }
 
