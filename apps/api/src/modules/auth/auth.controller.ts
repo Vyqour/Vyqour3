@@ -24,6 +24,7 @@ import {
 } from './dto/auth.dto';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { Throttle } from '@nestjs/throttler';
 
 /**
  * Cookie flags for localhost + Codespaces + production.
@@ -162,6 +163,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
   @Post('forgot-password')
   @HttpCode(200)
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
