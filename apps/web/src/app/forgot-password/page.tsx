@@ -14,6 +14,7 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [requestSubmitted, setRequestSubmitted] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -39,10 +40,13 @@ export default function ForgotPasswordPage() {
       await apiClient.post('/auth/forgot-password', { email: normalizedEmail });
       setEmail(normalizedEmail);
       setRequestSubmitted(true);
+      setErrorMessage('');
       setCooldown(RESEND_COOLDOWN_SECONDS);
       toast.success('Password reset request received');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Unable to submit request. Try again.');
+      const message = err instanceof Error ? err.message : 'Unable to submit request. Try again.';
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -60,6 +64,7 @@ export default function ForgotPasswordPage() {
         <h1 className="text-2xl font-medium">Reset password</h1>
         {requestSubmitted ? (
           <div className="mt-4 space-y-4 text-sm text-muted-foreground" aria-live="polite">
+            {errorMessage ? <p role="alert" className="text-red-400">{errorMessage}</p> : null}
             <p>
               If an account exists for <span className="break-all font-medium text-foreground">{email}</span>,
               a reset link will be sent when email delivery is available. Check your inbox and spam folder.
@@ -83,6 +88,7 @@ export default function ForgotPasswordPage() {
           </div>
         ) : (
           <form onSubmit={onSubmit} className="mt-6 space-y-4">
+            {errorMessage ? <p role="alert" className="text-red-400">{errorMessage}</p> : null}
             <div>
               <label htmlFor="reset-email" className="label-field">Email</label>
               <Input
