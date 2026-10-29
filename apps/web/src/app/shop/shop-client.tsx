@@ -39,6 +39,7 @@ export function ShopClient() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sortOpen, setSortOpen] = useState(false);
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 2000]);
 
   const params = {
@@ -346,17 +347,49 @@ export function ShopClient() {
               ? ` · ${flat.find((c) => c.slug === params.category)?.name || params.category}`
               : ''}
           </p>
-          <select
-            className="input-field shop-sort-select max-w-xs w-full sm:w-auto"
-            value={params.sortBy}
-            onChange={(e) => setParam('sortBy', e.target.value)}
-          >
-            {sorts.map((s) => (
-              <option key={s.value} value={s.value} className="bg-black">
-                {s.label}
-              </option>
-            ))}
-          </select>
+          <div className="shop-sort relative w-full sm:w-80">
+            <button
+              type="button"
+              className="input-field flex w-full items-center justify-between gap-3 text-left"
+              aria-haspopup="listbox"
+              aria-expanded={sortOpen}
+              onClick={() => setSortOpen((open) => !open)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setSortOpen(false);
+              }}
+            >
+              <span>{sorts.find((sort) => sort.value === params.sortBy)?.label || 'Newest'}</span>
+              <svg
+                aria-hidden="true"
+                className={`h-4 w-4 shrink-0 transition-transform ${sortOpen ? 'rotate-180' : ''}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            {sortOpen && (
+              <div className="shop-sort-menu" role="listbox" aria-label="Sort products">
+                {sorts.map((sort) => (
+                  <button
+                    type="button"
+                    key={sort.value}
+                    role="option"
+                    aria-selected={params.sortBy === sort.value}
+                    className={`shop-sort-option ${params.sortBy === sort.value ? 'is-selected' : ''}`}
+                    onClick={() => {
+                      setParam('sortBy', sort.value);
+                      setSortOpen(false);
+                    }}
+                  >
+                    {sort.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {loading ? (
