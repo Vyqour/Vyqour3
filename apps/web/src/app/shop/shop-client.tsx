@@ -347,7 +347,7 @@ export function ShopClient() {
               : ''}
           </p>
           <select
-            className="input-field max-w-xs"
+            className="input-field shop-sort-select max-w-xs w-full sm:w-auto"
             value={params.sortBy}
             onChange={(e) => setParam('sortBy', e.target.value)}
           >
