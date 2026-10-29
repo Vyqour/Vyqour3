@@ -98,30 +98,68 @@ export function ShopClient() {
     return [];
   }, [selectedRoot, params.category, roots, flat]);
 
+  const isAccessoryCategory = (slug: string) => {
+    const category = flat.find((c) => c.slug === slug);
+    const accessoryRoot = roots.find((c) => c.slug === 'accessories');
+    return slug === 'accessories' || category?.parentId === accessoryRoot?.id;
+  };
+
+  const visibleRoots = useMemo(() => {
+    if (params.collection === 'accessories') {
+      return roots.filter((c) => c.slug === 'accessories');
+    }
+    if (params.collection === 'clothes') {
+      return roots.filter((c) => c.slug !== 'accessories');
+    }
+    return roots;
+  }, [params.collection, roots]);
+
+  const setDepartment = (slug: string) => {
+    const q = new URLSearchParams(sp.toString());
+    if (slug) q.set('collection', slug);
+    else q.delete('collection');
+    q.delete('category');
+    q.delete('page');
+    router.push(`/shop?${q.toString()}`);
+  };
+
+  const setCategory = (slug: string) => {
+    const q = new URLSearchParams(sp.toString());
+    if (slug) {
+      q.set('category', slug);
+      const accessory = isAccessoryCategory(slug);
+      q.set('collection', accessory ? 'accessories' : 'clothes');
+    } else {
+      q.delete('category');
+    }
+    q.delete('page');
+    router.push(`/shop?${q.toString()}`);
+  };
+
   return (
     <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
       <aside className="space-y-6">
         {collections.length > 0 && (
           <div className="glass rounded-2xl p-4">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Collections
+              Departments
             </h3>
             <div className="flex flex-col gap-1">
               <button
                 type="button"
-                onClick={() => setParam('collection', '')}
+                onClick={() => setDepartment('')}
                 className={`rounded-lg px-3 py-2 text-left text-sm ${!params.collection ? 'bg-white/10 text-white' : 'text-muted-foreground hover:text-white'}`}
               >
-                All collections
+                All departments
               </button>
               {collections.map((c) => (
                 <button
                   type="button"
                   key={c.id}
-                  onClick={() => setParam('collection', c.slug)}
+                  onClick={() => setDepartment(c.slug)}
                   className={`rounded-lg px-3 py-2 text-left text-sm ${params.collection === c.slug ? 'bg-white/10 text-white' : 'text-muted-foreground hover:text-white'}`}
                 >
-                  {c.name}
+                  {c.slug === 'clothes' ? 'Clothing' : c.name}
                 </button>
               ))}
             </div>
@@ -135,16 +173,16 @@ export function ShopClient() {
           <div className="flex flex-col gap-1">
             <button
               type="button"
-              onClick={() => setParam('category', '')}
+              onClick={() => setCategory('')}
               className={`rounded-lg px-3 py-2 text-left text-sm ${!params.category ? 'bg-white/10 text-white' : 'text-muted-foreground hover:text-white'}`}
             >
               All
             </button>
-            {roots.map((c) => (
+            {visibleRoots.map((c) => (
               <button
                 type="button"
                 key={c.id}
-                onClick={() => setParam('category', c.slug)}
+                onClick={() => setCategory(c.slug)}
                 className={`rounded-lg px-3 py-2 text-left text-sm ${params.category === c.slug ? 'bg-white/10 text-white' : 'text-muted-foreground hover:text-white'}`}
               >
                 {c.name}
@@ -175,15 +213,15 @@ export function ShopClient() {
 
       <div>
         {/* Category / subcategory image cards */}
-        {!params.category && roots.length > 0 && (
+        {!params.category && visibleRoots.length > 0 && (
           <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-            {roots.map((c) => {
+            {visibleRoots.map((c) => {
               const src = resolveCategoryImage(c, 600);
               return (
                 <button
                   type="button"
                   key={c.id}
-                  onClick={() => setParam('category', c.slug)}
+                  onClick={() => setCategory(c.slug)}
                   className="group relative min-h-[120px] overflow-hidden rounded-2xl border border-white/10 text-left"
                 >
                   <Image
