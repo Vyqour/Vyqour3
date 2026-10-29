@@ -133,13 +133,10 @@ export function ShopClient() {
 
   const setCategory = (slug: string) => {
     const q = new URLSearchParams(sp.toString());
-    if (slug) {
-      q.set('category', slug);
-      const accessory = isAccessoryCategory(slug);
-      q.set('collection', accessory ? 'accessories' : 'clothes');
-    } else {
-      q.delete('category');
-    }
+    if (slug) q.set('category', slug);
+    else q.delete('category');
+    // Department is only a UI grouping. Do not send it as a product collection filter.
+    q.delete('collection');
     q.delete('page');
     router.push(`/shop?${q.toString()}`);
   };
@@ -327,7 +324,7 @@ export function ShopClient() {
                 <button
                   type="button"
                   key={c.id}
-                  onClick={() => setParam('category', c.slug)}
+                  onClick={() => setCategory(c.slug)}
                   className="group relative min-h-[110px] overflow-hidden rounded-2xl border border-white/10 text-left"
                 >
                   <Image
