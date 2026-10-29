@@ -28,10 +28,10 @@ export class MailService {
     }
   }
 
-  private async send(to: string, subject: string, html: string, replyTo?: string) {
+  private async send(to: string, subject: string, html: string, replyTo?: string): Promise<boolean> {
     if (!this.transporter) {
-      this.logger.log(`[email:dev] to=${to} subject=${subject}`);
-      return;
+      this.logger.warn(`Email not sent: SMTP is not configured (subject=${subject})`);
+      return false;
     }
     try {
       await this.transporter.sendMail({
@@ -41,13 +41,14 @@ export class MailService {
         html,
         ...(replyTo ? { replyTo } : {}),
       });
+      return true;
     } catch (err) {
       this.logger.error(
         `Failed to send email to=${to} subject=${subject}: ${
           err instanceof Error ? err.message : String(err)
         }`,
       );
-      // Do not throw — auth / checkout must not fail solely because SMTP is down
+      return false;
     }
   }
 
@@ -66,10 +67,10 @@ export class MailService {
     );
   }
 
-  async sendPasswordResetEmail(email: string, token: string) {
+  async sendPasswordResetEmail(email: string, token: string): Promise<boolean> {
     const webUrl = this.config.get<string>('webUrl');
     const link = `${webUrl}/reset-password?token=${token}`;
-    await this.send(
+    return this.send(
       email,
       'Reset your VYQOUR password',
       `<div style="font-family:Inter,Arial,sans-serif;background:#0B0B0B;color:#fff;padding:32px">
