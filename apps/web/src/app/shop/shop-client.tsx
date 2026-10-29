@@ -142,7 +142,7 @@ export function ShopClient() {
         {collections.length > 0 && (
           <div className="glass rounded-2xl p-4">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Collections
+              Departments
             </h3>
             <div className="flex flex-col gap-1">
               <button
@@ -159,7 +159,7 @@ export function ShopClient() {
                   onClick={() => setDepartment(c.slug)}
                   className={`rounded-lg px-3 py-2 text-left text-sm ${params.collection === c.slug ? 'bg-white/10 text-white' : 'text-muted-foreground hover:text-white'}`}
                 >
-                  {c.name}
+                  {c.slug === 'clothes' ? 'Clothing' : c.name}
                 </button>
               ))}
             </div>
@@ -213,9 +213,9 @@ export function ShopClient() {
 
       <div>
         {/* Category / subcategory image cards */}
-        {!params.category && roots.length > 0 && (
+        {!params.category && visibleRoots.length > 0 && (
           <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-            {roots.map((c) => {
+            {visibleRoots.map((c) => {
               const src = resolveCategoryImage(c, 600);
               return (
                 <button
