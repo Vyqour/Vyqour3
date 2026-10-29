@@ -125,13 +125,21 @@ body {
 }
 
 
-/* Keep native dropdown controls away from container edges and add breathing room below. */
+/* Consistent spacing for dropdown controls across the storefront. */
 select {
-  max-width: calc(100% - 0.5rem);
-  margin-left: -0.5rem;
+  box-sizing: border-box;
+  max-width: 100%;
   margin-bottom: 0.75rem;
 }
 
-select.input-field {
-  box-sizing: border-box;
+.shop-sort-select {
+  margin-right: 0.75rem;
+  margin-left: 0;
+  margin-bottom: 0.75rem;
+}
+
+@media (max-width: 639px) {
+  .shop-sort-select {
+    margin-right: 0;
+  }
 }
