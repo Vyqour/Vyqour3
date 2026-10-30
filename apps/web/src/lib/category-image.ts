@@ -41,7 +41,28 @@ const CATEGORY_IMAGES: Record<string, string> = {
   bottoms: UNSPLASH('photo-1624378439575-d8705ad7ae80'),
   tops: UNSPLASH('photo-1434389677669-e08b4cac3105'),
   dresses: UNSPLASH('photo-1595777457583-95e059d581b8'),
+
+  // Accessories: use category-specific imagery instead of the generic clothing-rack fallback.
   accessories: UNSPLASH('photo-1523170335258-f5ed11844a49'),
+  'mouse-pads': UNSPLASH('photo-1569050806800-0d6be7035923'),
+  'mouse-pad': UNSPLASH('photo-1569050806800-0d6be7035923'),
+  mousepads: UNSPLASH('photo-1569050806800-0d6be7035923'),
+  'mouse-pads-and-mats': UNSPLASH('photo-1569050806800-0d6be7035923'),
+  scarves: UNSPLASH('photo-1527167598984-8802d8028eea'),
+  scarf: UNSPLASH('photo-1527167598984-8802d8028eea'),
+  stoles: UNSPLASH('photo-1527167598984-8802d8028eea'),
+  stole: UNSPLASH('photo-1527167598984-8802d8028eea'),
+  scrunchies: UNSPLASH('photo-1606772016409-d4a55e32be6e'),
+  scrunchy: UNSPLASH('photo-1606772016409-d4a55e32be6e'),
+  'dog-tags': UNSPLASH('photo-1611095238259-ab81ffff95b7'),
+  'dog-tag': UNSPLASH('photo-1611095238259-ab81ffff95b7'),
+  dogtags: UNSPLASH('photo-1611095238259-ab81ffff95b7'),
+  pendants: UNSPLASH('photo-1569397288884-4d43d6738fbd'),
+  pendant: UNSPLASH('photo-1569397288884-4d43d6738fbd'),
+  'personalized-pens': UNSPLASH('photo-1679119790850-161688b0417e'),
+  'personalised-pens': UNSPLASH('photo-1679119790850-161688b0417e'),
+  'personalized-pen': UNSPLASH('photo-1679119790850-161688b0417e'),
+  'personalised-pen': UNSPLASH('photo-1679119790850-161688b0417e'),
   clothes: UNSPLASH('photo-1489987707025-afc232f7ea0f'),
   clothing: UNSPLASH('photo-1489987707025-afc232f7ea0f'),
   apparel: UNSPLASH('photo-1489987707025-afc232f7ea0f'),
@@ -87,6 +108,13 @@ function isBlankOrPlaceholder(url: string): boolean {
   }
 }
 
+function isGenericCategoryImage(url: string): boolean {
+  // Older category records may store the shared clothing-store fallback in imageUrl.
+  // Let a category-specific mapping replace that generic image, while preserving
+  // genuine custom image URLs set by the admin.
+  return url.includes('photo-1441986300917-64674bd600d8');
+}
+
 export function resolveCategoryImage(
   category: { name: string; slug?: string | null; imageUrl?: string | null },
   size = 800,
@@ -95,7 +123,7 @@ export function resolveCategoryImage(
   const name = category.name || 'Category';
   const slug = category.slug || '';
 
-  if (url && !isBlankOrPlaceholder(url)) {
+  if (url && !isBlankOrPlaceholder(url) && !isGenericCategoryImage(url)) {
     return url;
   }
 
