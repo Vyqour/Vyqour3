@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { OrdersService } from './orders.service';
@@ -25,8 +26,9 @@ export class OrdersController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Get('track/:orderNumber')
-  track(@Param('orderNumber') orderNumber: string, @Query('email') email?: string) {
+  track(@Param('orderNumber') orderNumber: string, @Query('email') email: string) {
     return this.orders.track(orderNumber, email);
   }
 

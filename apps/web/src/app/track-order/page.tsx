@@ -20,6 +20,7 @@ function TrackForm() {
     paymentStatus: string;
     trackingNumber?: string;
     carrier?: string;
+    estimatedDelivery?: string | null;
     statusHistory?: { status: string; note?: string; createdAt: string }[];
     items?: { productName: string; quantity: number }[];
   } | null>(null);
@@ -28,7 +29,7 @@ function TrackForm() {
     e.preventDefault();
     setLoading(true);
     try {
-      const q = email ? `?email=${encodeURIComponent(email)}` : '';
+      const q = `?email=${encodeURIComponent(email.trim())}`;
       const data = await apiClient.get<typeof result>(`/orders/track/${orderNumber}${q}`);
       setResult(data);
     } catch (err) {
@@ -47,8 +48,8 @@ function TrackForm() {
           <Input required value={orderNumber} onChange={(e) => setOrderNumber(e.target.value.toUpperCase())} placeholder="VYQ..." />
         </div>
         <div>
-          <label className="label-field">Email (optional)</label>
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <label className="label-field">Order email</label>
+          <Input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email used at checkout" />
         </div>
         <Button type="submit" className="w-full" loading={loading}>
           Track
@@ -62,6 +63,11 @@ function TrackForm() {
             <Badge>{result.status}</Badge>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">Payment: {result.paymentStatus}</p>
+          {result.estimatedDelivery && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              Estimated delivery: {new Date(result.estimatedDelivery).toLocaleDateString('en-IN')}
+            </p>
+          )}
           {result.trackingNumber && (
             <p className="mt-1 text-sm">
               Tracking: {result.trackingNumber} {result.carrier ? `(${result.carrier})` : ''}

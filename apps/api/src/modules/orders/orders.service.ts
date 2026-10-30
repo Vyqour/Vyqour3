@@ -252,7 +252,10 @@ this.mail
     return order;
   }
 
-  async track(orderNumber: string, email?: string) {
+  async track(orderNumber: string, email: string) {
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    if (!normalizedEmail) throw new NotFoundException('Order not found');
+
     const order = await this.prisma.order.findUnique({
       where: { orderNumber },
       include: {
@@ -262,7 +265,7 @@ this.mail
       },
     });
     if (!order) throw new NotFoundException('Order not found');
-    if (email && order.user.email.toLowerCase() !== email.toLowerCase()) {
+    if (order.user.email.trim().toLowerCase() !== normalizedEmail) {
       throw new NotFoundException('Order not found');
     }
     return {

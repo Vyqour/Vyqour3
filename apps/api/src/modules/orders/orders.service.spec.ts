@@ -417,3 +417,40 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
     });
   });
 });
+
+
+describe('OrdersService.track - customer verification', () => {
+  let service: OrdersService;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    mockPrisma = {
+      order: { findUnique: jest.fn() },
+    };
+    service = new OrdersService(mockPrisma, {} as any, {} as any, {} as any);
+  });
+
+  it('rejects a missing email without querying the order', async () => {
+    await expect(service.track('VYQ10001', '')).rejects.toThrow('Order not found');
+    expect(mockPrisma.order.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects an incorrect email with the same not-found response', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({ user: { email: 'buyer@example.com' } });
+    await expect(service.track('VYQ10001', 'wrong@example.com')).rejects.toThrow('Order not found');
+  });
+
+  it('accepts the matching email case-insensitively and trims whitespace', async () => {
+    const order = {
+      orderNumber: 'VYQ10001', status: 'SHIPPED', paymentStatus: 'PAID',
+      trackingNumber: 'AWB123', carrier: 'Courier', estimatedDelivery: null,
+      shippedAt: null, deliveredAt: null, createdAt: new Date(), items: [],
+      statusHistory: [], user: { email: 'Buyer@Example.com' },
+    };
+    mockPrisma.order.findUnique.mockResolvedValue(order);
+    const result = await service.track('VYQ10001', '  buyer@example.com  ');
+    expect(result.orderNumber).toBe('VYQ10001');
+    expect(result.trackingNumber).toBe('AWB123');
+    expect(result).not.toHaveProperty('user');
+  });
+});
