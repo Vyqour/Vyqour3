@@ -10,7 +10,7 @@ const items = [
   {
     icon: Truck,
     title: 'India-wide Delivery',
-    body: 'Fast shipping across India. Free over ₹1,999. COD available.',
+    body: 'Fast shipping across India. Free over 1,999. COD available.',
   },
   {
     icon: RefreshCcw,
