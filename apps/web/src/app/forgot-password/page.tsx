@@ -66,8 +66,7 @@ export default function ForgotPasswordPage() {
           <div className="mt-4 space-y-4 text-sm text-muted-foreground" aria-live="polite">
             {errorMessage ? <p role="alert" className="text-red-400">{errorMessage}</p> : null}
             <p>
-              If an account exists for <span className="break-all font-medium text-foreground">{email}</span>,
-              a reset link will be sent when email delivery is available. Check your inbox and spam folder.
+              If an account is associated with this email address, you’ll receive a password reset link. Please check your inbox and spam folder.
             </p>
             <Button
               type="button"
