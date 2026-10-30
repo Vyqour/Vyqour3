@@ -154,7 +154,7 @@ export function ShopClient() {
         </div>
         <div className="glass rounded-2xl p-4">
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Price (₹)
+            Price range
           </h3>
           <div className="flex gap-2">
             <input
