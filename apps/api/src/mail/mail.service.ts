@@ -1,46 +1,49 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private transporter: nodemailer.Transporter | null = null;
-  private from: string;
+  private readonly apiKey: string | undefined;
+  private readonly from: string;
 
   constructor(private readonly config: ConfigService) {
-    this.from = this.config.get<string>('smtp.from') || 'VYQOUR <noreply@vyqour.com>';
-    const host = this.config.get<string>('smtp.host');
-    const user = this.config.get<string>('smtp.user');
-    const pass = this.config.get<string>('smtp.pass');
-    if (host && user && pass) {
-      this.transporter = nodemailer.createTransport({
-        host,
-        port: this.config.get<number>('smtp.port') || 587,
-        secure: false,
-        auth: { user, pass },
-        connectionTimeout: 10_000,
-        greetingTimeout: 10_000,
-        socketTimeout: 15_000,
-      });
-    } else {
-      this.logger.warn('SMTP not configured — outgoing emails are disabled');
+    this.apiKey = this.config.get<string>('resend.apiKey');
+    this.from = this.config.get<string>('resend.from') || 'VYQOUR <noreply@vyqour.com>';
+    if (!this.apiKey) {
+      this.logger.warn('RESEND_API_KEY is not configured — outgoing emails are disabled');
     }
   }
 
   private async send(to: string, subject: string, html: string, replyTo?: string): Promise<boolean> {
-    if (!this.transporter) {
-      this.logger.warn(`Email not sent: SMTP is not configured (subject=${subject})`);
+    if (!this.apiKey) {
+      this.logger.warn(`Email not sent: Resend API key is not configured (subject=${subject})`);
       return false;
     }
+
     try {
-      await this.transporter.sendMail({
-        from: this.from,
-        to,
-        subject,
-        html,
-        ...(replyTo ? { replyTo } : {}),
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: this.from,
+          to: [to],
+          subject,
+          html,
+          ...(replyTo ? { reply_to: replyTo } : {}),
+        }),
+        signal: AbortSignal.timeout(15_000),
       });
+
+      if (!response.ok) {
+        const details = await response.text();
+        this.logger.error(`Resend rejected email (status=${response.status}): ${details}`);
+        return false;
+      }
+
       return true;
     } catch (err) {
       this.logger.error(

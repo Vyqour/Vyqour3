@@ -1,14 +1,11 @@
 import { ConfigService } from '@nestjs/config';
 import { MailService } from './mail.service';
 
-describe('MailService password reset delivery', () => {
-  const createMailService = () => {
-    const values: Record<string, string | number> = {
-      'smtp.host': 'smtp.example.test',
-      'smtp.user': 'mailer@example.test',
-      'smtp.pass': 'test-password',
-      'smtp.port': 587,
-      'smtp.from': 'VYQOUR <noreply@example.test>',
+describe('MailService password reset delivery through Resend', () => {
+  const createMailService = (apiKey = 're_test_api_key') => {
+    const values: Record<string, string> = {
+      'resend.apiKey': apiKey,
+      'resend.from': 'VYQOUR <noreply@example.test>',
       webUrl: 'https://vyqour.example.test',
     };
     const config = {
@@ -17,36 +14,54 @@ describe('MailService password reset delivery', () => {
     return new MailService(config);
   };
 
-  it('returns true only when the mail provider accepts the reset email', async () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('sends the password reset email through the Resend HTTPS API', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => '',
+    } as Response);
     const service = createMailService();
-    const sendMail = jest.fn().mockResolvedValue({ messageId: 'test-message' });
-    (service as any).transporter = { sendMail };
 
     await expect(service.sendPasswordResetEmail('customer@example.test', 'secure-token')).resolves.toBe(true);
-    expect(sendMail).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.resend.com/emails',
       expect.objectContaining({
-        to: 'customer@example.test',
-        subject: 'Reset your VYQOUR password',
-        html: expect.stringContaining('/reset-password?token=secure-token'),
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer re_test_api_key',
+          'Content-Type': 'application/json',
+        }),
+        body: expect.stringContaining('/reset-password?token=secure-token'),
       }),
     );
+    const payload = JSON.parse(fetchMock.mock.calls[0][1]?.body as string);
+    expect(payload).toMatchObject({
+      from: 'VYQOUR <noreply@example.test>',
+      to: ['customer@example.test'],
+      subject: 'Reset your VYQOUR password',
+    });
   });
 
-  it('returns false when the mail provider rejects the reset email', async () => {
+  it('returns false when Resend rejects the email', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 422,
+      text: async () => 'Invalid sender',
+    } as Response);
     const service = createMailService();
-    (service as any).transporter = {
-      sendMail: jest.fn().mockRejectedValue(new Error('SMTP unavailable')),
-    };
 
     await expect(service.sendPasswordResetEmail('customer@example.test', 'secure-token')).resolves.toBe(false);
   });
 
-  it('returns false when SMTP is not configured', async () => {
-    const config = {
-      get: jest.fn(() => undefined),
-    } as unknown as ConfigService;
-    const service = new MailService(config);
+  it('returns false when the Resend API key is missing', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch');
+    const service = createMailService('');
 
     await expect(service.sendPasswordResetEmail('customer@example.test', 'secure-token')).resolves.toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
