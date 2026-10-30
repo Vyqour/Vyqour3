@@ -1,10 +1,10 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-
 
 export function Hero() {
   return (
@@ -20,7 +20,7 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             className="mb-4 text-xs font-semibold uppercase tracking-[0.3em] text-primary-glow"
           >
-             Modern Fashion & Lifestyle Brand · India
+            Modern Fashion & Lifestyle Brand · India
           </motion.p>
           <motion.h1
             initial={{ opacity: 0, y: 16 }}
@@ -38,7 +38,7 @@ export function Hero() {
             transition={{ delay: 0.12 }}
             className="mt-6 max-w-md text-base leading-relaxed text-muted-foreground"
           >
-            Vyqour is a modern lifestyle and fashion brand that creates premium clothing and accessories designed to help people express their identity, confidence, and individuality.
+            Wear what feels like you. From everyday favourites to standout pieces, VYQOUR is made for your style, your confidence, and your story.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -48,7 +48,7 @@ export function Hero() {
           >
             <Button asChild size="lg">
               <Link href="/shop">
-                Shop Collection <ArrowRight className="h-4 w-4" />
+                Find Your Style <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
             <Button asChild variant="secondary" size="lg">
@@ -66,7 +66,7 @@ export function Hero() {
               <p>GSM fabrics</p>
             </div>
             <div>
-              <p className="text-xl font-medium text-white">₹499+</p>
+              <p className="text-xl font-medium text-white">499+</p>
               <p>Free shipping</p>
             </div>
             <div>
@@ -83,24 +83,39 @@ export function Hero() {
           className="relative mx-auto aspect-[4/5] w-full max-w-md"
         >
           <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-br from-primary/40 via-transparent to-secondary/30 blur-2xl" />
-          <div className="glass relative flex h-full flex-col justify-between overflow-hidden rounded-[2rem] bg-card-shine p-8">
-            <div className="flex items-start justify-between">
-              <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <div className="glass relative h-full overflow-hidden rounded-[2rem] bg-card-shine">
+            <Image
+              src="https://images.unsplash.com/photo-1499972777470-6a932ea55420?auto=format&fit=crop&w=1200&q=85"
+              alt="Black streetwear hoodie editorial photograph"
+              fill
+              priority
+              unoptimized
+              sizes="(max-width: 768px) 100vw, 448px"
+              className="object-cover object-center"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/10 to-black/80" />
+            <div className="absolute inset-x-0 top-0 flex items-start justify-between p-6 sm:p-8">
+              <span className="rounded-full border border-white/25 bg-black/20 px-3 py-1 text-[10px] uppercase tracking-wider text-white backdrop-blur-sm">
                 SS26 Drop
               </span>
-              <span className="text-xs text-primary-glow">VYQOUR</span>
+              <span className="bg-primary/80 px-2 py-1 text-xs font-medium tracking-wide text-white">
+                VYQOUR
+              </span>
             </div>
-            <div className="flex flex-1 items-center justify-center">
-              <div className="relative">
-                <div className="absolute inset-0 animate-float rounded-full bg-primary/30 blur-3xl" />
-                <p className="relative text-center text-6xl font-semibold tracking-[0.35em] sm:text-7xl">
-                  V
-                </p>
-              </div>
-            </div>
-            <div>
-              <p className="text-lg font-medium">Identity Heavy Hoodie</p>
-              <p className="mt-1 text-sm text-muted-foreground">From ₹3,499 · 450 GSM</p>
+            <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8">
+              <p className="text-xs font-medium uppercase tracking-[0.25em] text-white/75">
+                Wear Your Identity
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                Identity Heavy Hoodie
+              </h2>
+              <p className="mt-2 text-sm text-white/80">450 GSM · Built for your style</p>
+              <Link
+                href="/shop"
+                className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-white underline decoration-white/60 underline-offset-4 transition hover:decoration-white"
+              >
+                Explore the drop <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
           </div>
         </motion.div>
