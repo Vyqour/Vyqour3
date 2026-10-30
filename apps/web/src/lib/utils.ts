@@ -8,8 +8,6 @@ export function cn(...inputs: ClassValue[]) {
 export function formatInr(amount: number | string | null | undefined) {
   const n = typeof amount === 'string' ? parseFloat(amount) : amount || 0;
   return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
     maximumFractionDigits: 0,
   }).format(n);
 }
