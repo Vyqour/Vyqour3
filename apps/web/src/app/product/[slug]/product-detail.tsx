@@ -31,8 +31,13 @@ export function ProductDetail({ product }: { product: Product }) {
   const [color, setColor] = useState(colors[0]?.name || '');
   const [qty, setQty] = useState(1);
 
+  const hasVariants = (product.variants?.length || 0) > 0;
   const variant = product.variants?.find(
-    (v) => (!size || v.size === size) && (!color || v.color === color),
+    (v) =>
+      (!sizes.length || v.size === size) &&
+      (!colors.length || v.color === color) &&
+      (sizes.length ? Boolean(size) : true) &&
+      (colors.length ? Boolean(color) : true),
   );
   const price = Number(variant?.price ?? product.basePrice);
   const compare = product.compareAtPrice ? Number(product.compareAtPrice) : null;
@@ -45,6 +50,14 @@ export function ProductDetail({ product }: { product: Product }) {
   const [loading, setLoading] = useState(false);
 
   const add = async () => {
+    if (hasVariants && !variant) {
+      toast.error('Please select an available size and color combination');
+      return;
+    }
+    if (variant && variant.stock < qty) {
+      toast.error('Not enough stock for the selected quantity');
+      return;
+    }
     setLoading(true);
     try {
       await addItem(product.id, qty, variant?.id);
@@ -155,6 +168,11 @@ export function ProductDetail({ product }: { product: Product }) {
                 <Plus className="h-4 w-4" />
               </button>
             </div>
+            {hasVariants && !variant && (
+              <p className="mt-2 text-xs text-destructive">
+                This size and color combination is unavailable. Choose another option.
+              </p>
+            )}
             {variant && (
               <p className="mt-2 text-xs text-muted-foreground">
                 {variant.stock > 0 ? `${variant.stock} in stock` : 'Out of stock'}
@@ -163,7 +181,13 @@ export function ProductDetail({ product }: { product: Product }) {
           </div>
 
           <div className="mt-8 flex flex-wrap gap-3">
-            <Button size="lg" className="min-w-[180px]" loading={loading} onClick={add} disabled={variant?.stock === 0}>
+            <Button
+              size="lg"
+              className="min-w-[180px]"
+              loading={loading}
+              onClick={add}
+              disabled={loading || (hasVariants && (!variant || variant.stock < 1))}
+            >
               Add to Bag
             </Button>
             <Button
