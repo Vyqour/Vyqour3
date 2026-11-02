@@ -33,7 +33,7 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
       },
       orderStatusHistory: { create: jest.fn() },
       productVariant: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      product: { update: jest.fn() },
+      product: { findUnique: jest.fn(), update: jest.fn() },
       coupon: {
         findUnique: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -237,6 +237,10 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
 
     function seedHappyPath(couponCode: string | null) {
       mockCart.getCart.mockResolvedValue(cartWithCoupon(couponCode));
+      mockPrisma.product.findUnique.mockResolvedValue({
+        status: 'ACTIVE',
+        variants: [{ id: 'variant_1', isActive: true }],
+      });
       mockPrisma.address.findFirst.mockResolvedValue({ id: 'addr_1' });
       mockPrisma.order.create.mockResolvedValue({
         ...baseOrder,
@@ -341,6 +345,12 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
     }
 
     function seedCart(items: any[]) {
+      mockPrisma.product.findUnique.mockResolvedValue({
+        status: 'ACTIVE',
+        variants: items.some((item) => item.variantId)
+          ? [{ id: 'variant_1', isActive: true }]
+          : [],
+      });
       mockCart.getCart.mockResolvedValue({
         id: 'cart_1',
         items,

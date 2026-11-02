@@ -57,6 +57,18 @@ export class CartService {
     return this.withTotals(cart);
   }
 
+  private async assertVariantStock(variantId: string, quantity: number) {
+    const variant = await this.prisma.productVariant.findUnique({
+      where: { id: variantId },
+    });
+    if (!variant || !variant.isActive) {
+      throw new BadRequestException('Invalid variant');
+    }
+    if (variant.stock < quantity) {
+      throw new BadRequestException('Insufficient stock');
+    }
+  }
+
   async addItem(dto: AddToCartDto, userId?: string, sessionId?: string) {
     const product = await this.prisma.product.findUnique({
       where: { id: dto.productId },
@@ -65,10 +77,12 @@ export class CartService {
     if (!product || product.status !== 'ACTIVE') {
       throw new NotFoundException('Product not available');
     }
+    if (product.variants.length > 0 && !dto.variantId) {
+      throw new BadRequestException('Please select a valid product variant');
+    }
     if (dto.variantId) {
       const variant = product.variants.find((v) => v.id === dto.variantId);
       if (!variant || !variant.isActive) throw new BadRequestException('Invalid variant');
-      if (variant.stock < dto.quantity) throw new BadRequestException('Insufficient stock');
     }
 
     const cart = await this.getOrCreateCart(userId, sessionId);
@@ -76,6 +90,9 @@ export class CartService {
       (i) => i.productId === dto.productId && i.variantId === (dto.variantId || null),
     );
 
+    if (dto.variantId) {
+      await this.assertVariantStock(dto.variantId, (existing?.quantity || 0) + dto.quantity);
+    }
     if (existing) {
       await this.prisma.cartItem.update({
         where: { id: existing.id },
@@ -101,6 +118,19 @@ export class CartService {
     if (dto.quantity === 0) {
       await this.prisma.cartItem.delete({ where: { id: itemId } });
     } else {
+      const product = await this.prisma.product.findUnique({
+        where: { id: item.productId },
+        include: { variants: true },
+      });
+      if (!product || product.status !== 'ACTIVE') {
+        throw new BadRequestException('Product is no longer available');
+      }
+      if (product.variants.length > 0 && !item.variantId) {
+        throw new BadRequestException('Please select a valid product variant');
+      }
+      if (item.variantId) {
+        await this.assertVariantStock(item.variantId, dto.quantity);
+      }
       await this.prisma.cartItem.update({
         where: { id: itemId },
         data: { quantity: dto.quantity },
@@ -152,9 +182,25 @@ export class CartService {
     if (!guest?.items.length) return this.getCart(userId);
     const userCart = await this.getOrCreateCart(userId);
     for (const item of guest.items) {
+      const product = await this.prisma.product.findUnique({
+        where: { id: item.productId },
+        include: { variants: true },
+      });
+      if (!product || product.status !== 'ACTIVE') {
+        throw new BadRequestException('A guest-cart product is no longer available');
+      }
+      if (product.variants.length > 0 && !item.variantId) {
+        throw new BadRequestException('A guest-cart item is missing its variant');
+      }
       const existing = userCart.items.find(
         (i) => i.productId === item.productId && i.variantId === item.variantId,
       );
+      if (item.variantId) {
+        await this.assertVariantStock(
+          item.variantId,
+          (existing?.quantity || 0) + item.quantity,
+        );
+      }
       if (existing) {
         await this.prisma.cartItem.update({
           where: { id: existing.id },

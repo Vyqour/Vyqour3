@@ -66,10 +66,21 @@ export class OrdersService {
 
     // Stock check
     for (const item of cart.items) {
-      if (item.variantId && item.variant) {
-        if (item.variant.stock < item.quantity) {
-          throw new BadRequestException(`Insufficient stock for ${item.product.name}`);
-        }
+      const product = await this.prisma.product.findUnique({
+        where: { id: item.productId },
+        include: { variants: true },
+      });
+      if (!product || product.status !== 'ACTIVE') {
+        throw new BadRequestException(`Product unavailable: ${item.product.name}`);
+      }
+      if (product.variants.length > 0 && !item.variantId) {
+        throw new BadRequestException(`Select a valid variant for ${item.product.name}`);
+      }
+      if (item.variantId && (!item.variant || !item.variant.isActive)) {
+        throw new BadRequestException(`Invalid variant for ${item.product.name}`);
+      }
+      if (item.variantId && item.variant && item.variant.stock < item.quantity) {
+        throw new BadRequestException(`Insufficient stock for ${item.product.name}`);
       }
     }
 
