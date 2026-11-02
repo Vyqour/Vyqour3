@@ -68,7 +68,7 @@ export class OrdersService {
     for (const item of cart.items) {
       const product = await this.prisma.product.findUnique({
         where: { id: item.productId },
-        include: { variants: { where: { isActive: true } } },
+        include: { variants: true },
       });
       if (!product || product.status !== 'ACTIVE') {
         throw new BadRequestException(`Product unavailable: ${item.product.name}`);
