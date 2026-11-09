@@ -1,0 +1,12 @@
+# Netlify build configuration for the VYQOUR monorepo.
+# Keep the repository root as the base so npm workspaces resolve correctly.
+[build]
+  command = "npm run build:web"
+  publish = "apps/web/.next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+# Do not add a SPA catch-all redirect here. Next.js App Router requires
+# the Netlify Next.js runtime to handle SSR and route rendering.
