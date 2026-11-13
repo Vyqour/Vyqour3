@@ -517,7 +517,6 @@ export class QikinkService {
         OUT_FOR_DELIVERY: 4,
         DELIVERED: 5,
         CANCELLED: 9,
-        RETURNED: 9,
         REFUNDED: 9,
         RETURNED: 9,
       };
