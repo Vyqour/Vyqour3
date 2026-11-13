@@ -202,18 +202,6 @@ export class QikinkApiClient {
       // Treat explicit errors as failures, not as uncertain successful submissions.
       if (this.hasProviderError(responseBody)) {
         const message = this.providerErrorMessage(responseBody);
-        await this.log({
-          direction: 'outbound',
-          method,
-          path,
-          orderId,
-          statusCode,
-          success: false,
-          requestBody: body,
-          responseBody,
-          error: message,
-          durationMs: Date.now() - started,
-        });
         throw new Error(`Qikink ${method} ${path}: ${message}`);
       }
 
@@ -264,7 +252,12 @@ export class QikinkApiClient {
     if (!body || typeof body !== 'object') return 'Provider returned an error response';
     const value = body as Record<string, unknown>;
     const candidate = value.message || value.msg || value.error || value.status;
-    if (typeof candidate === 'string') return candidate.slice(0, 300);
+    if (typeof candidate === 'string') {
+      return candidate
+        .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[REDACTED_EMAIL]')
+        .replace(/\b\d{10,15}\b/g, '[REDACTED_PHONE]')
+        .slice(0, 300);
+    }
     return 'Provider returned an error response';
   }
 
