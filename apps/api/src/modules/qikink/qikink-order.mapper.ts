@@ -125,9 +125,9 @@ export function mapOrderToQikinkPayload(
             `Missing design_code for design placement in product "${item.productName}". Set a design_code (max 15 chars) in the product editor.`,
           );
         }
-        if (designCode.length > 15) {
+        if (designCode.length > 20) {
           throw new BadRequestException(
-            `Qikink design_code for product "${item.productName}" exceeds maximum 15 characters ("${designCode}").`,
+            `Qikink design_code for product "${item.productName}" exceeds maximum 20 characters ("${designCode}").`,
           );
         }
 
@@ -178,11 +178,15 @@ export function mapOrderToQikinkPayload(
   };
 
   if (String(opts.shipping) === '1') {
+    const addressLine1 = (addr.line1 || '').trim();
+    const address1 = addressLine1.slice(0, 90);
+    const overflow = addressLine1.slice(90).trim();
+    const address2 = [overflow, addr.line2?.trim()].filter(Boolean).join(' ').slice(0, 180);
     payload.shipping_address = {
       first_name: first,
       last_name: last,
-      address1: addr.line1,
-      address2: addr.line2 || '',
+      address1,
+      address2,
       phone: addr.phone || order.user.phone || '',
       email: order.user.email,
       city: addr.city,
