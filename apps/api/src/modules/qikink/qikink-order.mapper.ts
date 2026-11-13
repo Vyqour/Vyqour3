@@ -212,7 +212,7 @@ export function mapQikinkStatusToOrderStatus(
   if (/^returned$/.test(s)) return 'RETURNED';
   if (/(out for delivery|delivery rescheduled|ofd)/.test(s)) return 'OUT_FOR_DELIVERY';
   if (/^delivered$/.test(s)) return 'DELIVERED';
-  if (/(in transit|shipped|picked up|rto initiated|reverse pickup initiated)/.test(s)) return 'SHIPPED';
+  if (/(in transit|shipped|picked up)/.test(s)) return 'SHIPPED';
   if (/dispatch ready/.test(s)) return 'PROCESSING';
   // Qikink's Live, Live OOS, To be Printed, Partially Picklisted,
   // Printed and Manifested states are pre-delivery fulfilment states.
