@@ -129,7 +129,7 @@ export class QikinkApiClient {
     orderNumber?: string;
     internalOrderId?: string;
   }): Promise<QikinkOrderStatusResponse | null> {
-    const endpoint = this.config.get<string>('qikink.statusEndpoint') || '/api/order/list';
+    const endpoint = '/api/order/list';
     const qs = new URLSearchParams();
     if (params.orderId) qs.set('id', String(params.orderId));
     else if (params.orderNumber) qs.set('order_reference_no', String(params.orderNumber));
