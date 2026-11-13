@@ -294,8 +294,14 @@ export class QikinkApiClient {
           orderId: data.orderId,
           statusCode: data.statusCode,
           success: data.success,
-          requestBody: this.redactSensitiveData(data.requestBody) as object ?? undefined,
-          responseBody: this.redactSensitiveData(data.responseBody) as object ?? undefined,
+          requestBody:
+            data.requestBody == null
+              ? undefined
+              : (this.redactSensitiveData(data.requestBody) as object),
+          responseBody:
+            data.responseBody == null
+              ? undefined
+              : (this.redactSensitiveData(data.responseBody) as object),
           error: data.error,
           durationMs: data.durationMs,
         },
