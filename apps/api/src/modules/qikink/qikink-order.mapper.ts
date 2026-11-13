@@ -29,7 +29,7 @@ type OrderForQikink = Order & {
  * Our internal VYQ... numbers can be longer — compress safely.
  */
 export function toQikinkOrderNumber(order: Order): string {
-  const existing = (order.qikinkOrderNumber || '').replace(/[^a-zA-Z0-9]/g, '');
+  const existing = (order.qikinkOrderNumber || '').replace(/[^a-zA-Z0-9_]/g, '');
   if (existing && existing.length <= 15) return existing;
 
   // Keep the provider's 15-character alphanumeric limit while retaining a
@@ -208,7 +208,8 @@ export function mapQikinkStatusToOrderStatus(
   if (/^returned$/.test(s)) return 'RETURNED';
   if (/deliver/.test(s)) return 'DELIVERED';
   if (/(out for delivery|ofd)/.test(s)) return 'OUT_FOR_DELIVERY';
-  if (/(in transit|shipped|dispatch)/.test(s)) return 'SHIPPED';
+  if (/(in transit|shipped|picked up)/.test(s)) return 'SHIPPED';
+  if (/dispatch ready/.test(s)) return 'PROCESSING';
   // Qikink's Live, Live OOS, To be Printed, Partially Picklisted,
   // Printed and Manifested states are pre-delivery fulfilment states.
   if (/(live|to be printed|picklist|printed|manifested|process|produc|confirm|accepted|new)/.test(s)) {
