@@ -149,11 +149,13 @@ export class QikinkApiClient {
       };
       if (envelope.success === false || !Array.isArray(envelope.data)) return null;
       const rows = envelope.data as Array<Record<string, unknown>>;
+      // Never fall back to an unrelated first row. A wrong match could attach
+      // another customer's fulfilment status or tracking number to this order.
       const row = rows.find((item) =>
         params.orderId
           ? String(item.order_id) === String(params.orderId)
           : String(item.number || '').endsWith(String(params.orderNumber || '')),
-      ) || rows[0];
+      );
       if (!row) return null;
       const shipping =
         row.shipping && typeof row.shipping === 'object'
