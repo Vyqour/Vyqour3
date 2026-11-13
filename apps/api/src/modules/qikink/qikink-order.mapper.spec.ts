@@ -93,6 +93,23 @@ describe('qikink-order.mapper', () => {
       });
       expect(num).toBe('QIK123');
     });
+
+    it('sanitizes existing provider order numbers to alphanumeric characters', () => {
+      const num = toQikinkOrderNumber({
+        ...baseOrder,
+        qikinkOrderNumber: 'QIK-12_3',
+      });
+      expect(num).toBe('QIK123');
+      expect(num).toMatch(/^[a-zA-Z0-9]{1,15}$/);
+    });
+
+    it('generates a deterministic alphanumeric number no longer than 15 characters', () => {
+      const order = { ...baseOrder, qikinkOrderNumber: null };
+      const first = toQikinkOrderNumber(order);
+      expect(first).toHaveLength(15);
+      expect(first).toMatch(/^[a-zA-Z0-9]+$/);
+      expect(toQikinkOrderNumber(order)).toBe(first);
+    });
   });
 
   describe('mapOrderToQikinkPayload - Variant SKU Resolution', () => {
@@ -334,11 +351,18 @@ describe('qikink-order.mapper', () => {
       expect(mapQikinkStatusToOrderStatus('Hold')).toBeNull();
     });
 
-    it('maps processing, shipped, delivered, cancelled statuses correctly', () => {
-      expect(mapQikinkStatusToOrderStatus('processing')).toBe('PROCESSING');
-      expect(mapQikinkStatusToOrderStatus('shipped')).toBe('SHIPPED');
-      expect(mapQikinkStatusToOrderStatus('delivered')).toBe('DELIVERED');
-      expect(mapQikinkStatusToOrderStatus('cancelled')).toBe('CANCELLED');
+    it('maps Qikink fulfilment and shipping statuses correctly', () => {
+      expect(mapQikinkStatusToOrderStatus('Live')).toBe('PROCESSING');
+      expect(mapQikinkStatusToOrderStatus('Live OOS')).toBe('PROCESSING');
+      expect(mapQikinkStatusToOrderStatus('To be Printed')).toBe('PROCESSING');
+      expect(mapQikinkStatusToOrderStatus('Partially Picklisted')).toBe('PROCESSING');
+      expect(mapQikinkStatusToOrderStatus('Printed')).toBe('PROCESSING');
+      expect(mapQikinkStatusToOrderStatus('Manifested')).toBe('PROCESSING');
+      expect(mapQikinkStatusToOrderStatus('In-Transit')).toBe('SHIPPED');
+      expect(mapQikinkStatusToOrderStatus('Out for Delivery')).toBe('OUT_FOR_DELIVERY');
+      expect(mapQikinkStatusToOrderStatus('Delivered')).toBe('DELIVERED');
+      expect(mapQikinkStatusToOrderStatus('Cancelled')).toBe('CANCELLED');
+      expect(mapQikinkStatusToOrderStatus('Returned')).toBe('RETURNED');
     });
   });
 
