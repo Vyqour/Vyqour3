@@ -121,26 +121,57 @@ export class QikinkApiClient {
   }
 
   /**
-   * Optional status endpoint. Not fully documented in public Postman collection
-   * for all accounts — failures are treated as soft (caller decides).
+   * Qikink API 08-25 documents GET /api/order/list (and legacy GET /api/order).
+   * Normalize its paginated data[] response to the shape used by the service.
    */
   async getOrderStatus(params: {
     orderId?: string | number;
     orderNumber?: string;
     internalOrderId?: string;
   }): Promise<QikinkOrderStatusResponse | null> {
-    const endpoint = this.config.get<string>('qikink.statusEndpoint') || '/api/order/status';
+    const endpoint = this.config.get<string>('qikink.statusEndpoint') || '/api/order/list';
     const qs = new URLSearchParams();
-    if (params.orderId) qs.set('order_id', String(params.orderId));
-    if (params.orderNumber) qs.set('order_number', String(params.orderNumber));
-    const path = `${endpoint}?${qs.toString()}`;
+    if (params.orderId) qs.set('id', String(params.orderId));
+    else if (params.orderNumber) qs.set('order_reference_no', String(params.orderNumber));
+    else return null;
+    qs.set('params', 'order_id,number,status,shipping');
     try {
-      return await this.request<QikinkOrderStatusResponse>(
+      const result = await this.request<unknown>(
         'GET',
-        path,
+        `${endpoint}?${qs.toString()}`,
         undefined,
         params.internalOrderId,
       );
+      if (!result || typeof result !== 'object') return null;
+      const envelope = result as {
+        success?: boolean;
+        data?: unknown;
+      };
+      if (envelope.success === false || !Array.isArray(envelope.data)) return null;
+      const rows = envelope.data as Array<Record<string, unknown>>;
+      const row = rows.find((item) =>
+        params.orderId
+          ? String(item.order_id) === String(params.orderId)
+          : String(item.number || '').endsWith(String(params.orderNumber || '')),
+      ) || rows[0];
+      if (!row) return null;
+      const shipping =
+        row.shipping && typeof row.shipping === 'object'
+          ? (row.shipping as Record<string, unknown>)
+          : {};
+      return {
+        order_id: row.order_id as string | number | undefined,
+        order_number: row.number as string | undefined,
+        status: row.status as string | undefined,
+        awb: shipping.awb as string | undefined,
+        tracking_number: shipping.awb as string | undefined,
+        tracking_link: shipping.tracking_link as string | undefined,
+        courier_provider_name: shipping.courier_provider_name as string | undefined,
+        courier: shipping.courier_provider_name as string | undefined,
+        shipping_type: row.shipping_type as string | undefined,
+        payment_type: row.payment_type as string | undefined,
+        raw: row,
+      };
     } catch (err) {
       this.logger.warn(`Qikink status poll unavailable: ${(err as Error).message}`);
       return null;
