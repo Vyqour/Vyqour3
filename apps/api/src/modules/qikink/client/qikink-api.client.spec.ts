@@ -111,6 +111,31 @@ describe('QikinkApiClient', () => {
     }));
   });
 
+  it('does not return an unrelated first row when the requested Qikink order ID is absent', async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ Accesstoken: 'token', expires_in: 3600 }),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          success: true,
+          data: [{
+            order_id: 999,
+            number: 'OTHER-ORDER',
+            status: 'Delivered',
+            shipping: { awb: 'WRONG-AWB' },
+          }],
+        }),
+      } as unknown as Response);
+
+    const result = await client.getOrderStatus({ orderId: 123 });
+    expect(result).toBeNull();
+  });
+
   it('redacts customer contact and shipping details from stored API logs', async () => {
     global.fetch = jest.fn()
       .mockResolvedValueOnce({
