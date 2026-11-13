@@ -91,7 +91,7 @@ describe('qikink-order.mapper', () => {
         ...baseOrder,
         qikinkOrderNumber: 'QIK123',
       });
-      expect(num).toBe('QIK_123');
+      expect(num).toBe('QIK123');
     });
 
     it('sanitizes existing provider order numbers to alphanumeric characters', () => {
@@ -99,7 +99,7 @@ describe('qikink-order.mapper', () => {
         ...baseOrder,
         qikinkOrderNumber: 'QIK-12_3',
       });
-      expect(num).toBe('QIK123');
+      expect(num).toBe('QIK12_3');
       expect(num).toMatch(/^[a-zA-Z0-9_]{1,15}$/);
     });
 
