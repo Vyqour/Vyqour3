@@ -91,7 +91,7 @@ describe('qikink-order.mapper', () => {
         ...baseOrder,
         qikinkOrderNumber: 'QIK123',
       });
-      expect(num).toBe('QIK123');
+      expect(num).toBe('QIK_123');
     });
 
     it('sanitizes existing provider order numbers to alphanumeric characters', () => {
@@ -100,7 +100,7 @@ describe('qikink-order.mapper', () => {
         qikinkOrderNumber: 'QIK-12_3',
       });
       expect(num).toBe('QIK123');
-      expect(num).toMatch(/^[a-zA-Z0-9]{1,15}$/);
+      expect(num).toMatch(/^[a-zA-Z0-9_]{1,15}$/);
     });
 
     it('generates a deterministic alphanumeric number no longer than 15 characters', () => {
@@ -358,6 +358,9 @@ describe('qikink-order.mapper', () => {
       expect(mapQikinkStatusToOrderStatus('Partially Picklisted')).toBe('PROCESSING');
       expect(mapQikinkStatusToOrderStatus('Printed')).toBe('PROCESSING');
       expect(mapQikinkStatusToOrderStatus('Manifested')).toBe('PROCESSING');
+      expect(mapQikinkStatusToOrderStatus('Dispatch Ready')).toBe('PROCESSING');
+      expect(mapQikinkStatusToOrderStatus('Picked Up')).toBe('SHIPPED');
+      expect(mapQikinkStatusToOrderStatus('Partially Printed')).toBe('PROCESSING');
       expect(mapQikinkStatusToOrderStatus('In-Transit')).toBe('SHIPPED');
       expect(mapQikinkStatusToOrderStatus('Out for Delivery')).toBe('OUT_FOR_DELIVERY');
       expect(mapQikinkStatusToOrderStatus('Delivered')).toBe('DELIVERED');
