@@ -106,7 +106,7 @@ describe('qikink-order.mapper', () => {
     it('generates a deterministic alphanumeric number no longer than 15 characters', () => {
       const order = { ...baseOrder, qikinkOrderNumber: null };
       const first = toQikinkOrderNumber(order);
-      expect(first).toHaveLength(15);
+      expect(first.length).toBeLessThanOrEqual(15);
       expect(first).toMatch(/^[a-zA-Z0-9]+$/);
       expect(toQikinkOrderNumber(order)).toBe(first);
     });
