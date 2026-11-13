@@ -362,7 +362,9 @@ describe('qikink-order.mapper', () => {
       expect(mapQikinkStatusToOrderStatus('Picked Up')).toBe('SHIPPED');
       expect(mapQikinkStatusToOrderStatus('Partially Printed')).toBe('PROCESSING');
       expect(mapQikinkStatusToOrderStatus('In-Transit')).toBe('SHIPPED');
+      expect(mapQikinkStatusToOrderStatus('RTO Initiated')).toBe('SHIPPED');
       expect(mapQikinkStatusToOrderStatus('Out for Delivery')).toBe('OUT_FOR_DELIVERY');
+      expect(mapQikinkStatusToOrderStatus('Delivery rescheduled')).toBe('OUT_FOR_DELIVERY');
       expect(mapQikinkStatusToOrderStatus('Delivered')).toBe('DELIVERED');
       expect(mapQikinkStatusToOrderStatus('Cancelled')).toBe('CANCELLED');
       expect(mapQikinkStatusToOrderStatus('Returned')).toBe('RETURNED');
