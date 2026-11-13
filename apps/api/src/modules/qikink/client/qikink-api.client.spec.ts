@@ -41,12 +41,12 @@ describe('QikinkApiClient', () => {
         ok: true,
         status: 200,
         text: async () => JSON.stringify({ Accesstoken: 'token', expires_in: 3600 }),
-      } as Response)
+      } as unknown as Response)
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
         text: async () => JSON.stringify({ status_code: 400, message: 'Invalid SKU' }),
-      } as Response);
+      } as unknown as Response);
 
     await expect(client.createOrder({
       order_number: 'VYQ123456',
@@ -77,12 +77,12 @@ describe('QikinkApiClient', () => {
         ok: true,
         status: 200,
         text: async () => JSON.stringify({ Accesstoken: 'token', expires_in: 3600 }),
-      } as Response)
+      } as unknown as Response)
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
         text: async () => JSON.stringify({ order_id: 123, status_code: 200 }),
-      } as Response);
+      } as unknown as Response);
 
     await client.createOrder({
       order_number: 'VYQ123456',
