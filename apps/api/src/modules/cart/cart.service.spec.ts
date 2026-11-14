@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import { CartService } from './cart.service';
 
 describe('CartService stock and coupon safeguards', () => {
