@@ -242,7 +242,7 @@ export default function CheckoutPage() {
       }
     });
 
-  if (!hydrated || cartLoading) {
+  if (!hydrated || cartLoading || (!cart && !cartError)) {
     return (
       <div className="flex justify-center py-24">
         <Spinner />
