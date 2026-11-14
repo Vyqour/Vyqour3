@@ -65,21 +65,25 @@ export class CartService {
     if (!product || product.status !== 'ACTIVE') {
       throw new NotFoundException('Product not available');
     }
-    if (dto.variantId) {
-      const variant = product.variants.find((v) => v.id === dto.variantId);
-      if (!variant || !variant.isActive) throw new BadRequestException('Invalid variant');
-      if (variant.stock < dto.quantity) throw new BadRequestException('Insufficient stock');
-    }
 
     const cart = await this.getOrCreateCart(userId, sessionId);
     const existing = cart.items.find(
       (i) => i.productId === dto.productId && i.variantId === (dto.variantId || null),
     );
+    const nextQuantity = (existing?.quantity || 0) + dto.quantity;
+
+    if (dto.variantId) {
+      const variant = product.variants.find((v) => v.id === dto.variantId);
+      if (!variant || !variant.isActive) throw new BadRequestException('Selected variant is not available');
+      if (variant.stock < nextQuantity) {
+        throw new BadRequestException(`Only ${variant.stock} unit(s) are available for this variant`);
+      }
+    }
 
     if (existing) {
       await this.prisma.cartItem.update({
         where: { id: existing.id },
-        data: { quantity: existing.quantity + dto.quantity },
+        data: { quantity: nextQuantity },
       });
     } else {
       await this.prisma.cartItem.create({
@@ -101,6 +105,15 @@ export class CartService {
     if (dto.quantity === 0) {
       await this.prisma.cartItem.delete({ where: { id: itemId } });
     } else {
+      if (item.product.status !== 'ACTIVE') {
+        throw new BadRequestException('This product is no longer available');
+      }
+      if (item.variantId && (!item.variant || !item.variant.isActive)) {
+        throw new BadRequestException('This product variant is no longer available');
+      }
+      if (item.variant && item.variant.stock < dto.quantity) {
+        throw new BadRequestException(`Only ${item.variant.stock} unit(s) are available for this variant`);
+      }
       await this.prisma.cartItem.update({
         where: { id: itemId },
         data: { quantity: dto.quantity },
@@ -129,14 +142,29 @@ export class CartService {
 
   async applyCoupon(code: string, userId?: string, sessionId?: string) {
     const coupon = await this.prisma.coupon.findUnique({ where: { code: code.toUpperCase() } });
+    const now = new Date();
     if (!coupon || !coupon.isActive) throw new BadRequestException('Invalid coupon');
-    if (coupon.expiresAt < new Date() || coupon.startsAt > new Date()) {
-      throw new BadRequestException('Coupon not active');
+    if (coupon.expiresAt < now || coupon.startsAt > now) {
+      throw new BadRequestException('Coupon is not active');
     }
-    if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) {
+    if (coupon.usageLimit != null && coupon.usageCount >= coupon.usageLimit) {
       throw new BadRequestException('Coupon usage limit reached');
     }
+    if (userId && coupon.perUserLimit > 0) {
+      const priorUses = await this.prisma.order.count({
+        where: { userId, couponCode: coupon.code },
+      });
+      if (priorUses >= coupon.perUserLimit) {
+        throw new BadRequestException('You have already used this coupon the maximum number of times');
+      }
+    }
     const cart = await this.getOrCreateCart(userId, sessionId);
+    const current = await this.withTotals(cart);
+    if (coupon.minOrderAmount && current.summary.subtotal < Number(coupon.minOrderAmount)) {
+      throw new BadRequestException(
+        `This coupon requires a minimum order of ₹${Number(coupon.minOrderAmount).toFixed(0)}`,
+      );
+    }
     await this.prisma.cart.update({
       where: { id: cart.id },
       data: { couponCode: coupon.code },
@@ -191,22 +219,39 @@ export class CartService {
     let discountAmount = 0;
     let coupon = null as Awaited<ReturnType<typeof this.prisma.coupon.findUnique>> | null;
     if (cart.couponCode) {
-      coupon = await this.prisma.coupon.findUnique({ where: { code: cart.couponCode } });
-      if (coupon && coupon.isActive && coupon.expiresAt >= new Date()) {
-        if (!coupon.minOrderAmount || subtotal >= Number(coupon.minOrderAmount)) {
-          if (coupon.type === 'PERCENTAGE') {
-            discountAmount = (subtotal * Number(coupon.value)) / 100;
-            if (coupon.maxDiscount) {
-              discountAmount = Math.min(discountAmount, Number(coupon.maxDiscount));
-            }
-          } else if (coupon.type === 'FIXED') {
-            discountAmount = Math.min(Number(coupon.value), subtotal);
+      const candidate = await this.prisma.coupon.findUnique({ where: { code: cart.couponCode } });
+      const now = new Date();
+      let withinPerUserLimit = true;
+      if (candidate && cart.userId && candidate.perUserLimit > 0) {
+        const priorUses = await this.prisma.order.count({
+          where: { userId: cart.userId, couponCode: candidate.code },
+        });
+        withinPerUserLimit = priorUses < candidate.perUserLimit;
+      }
+      const eligible = Boolean(
+        candidate &&
+          candidate.isActive &&
+          candidate.startsAt <= now &&
+          candidate.expiresAt >= now &&
+          (candidate.usageLimit == null || candidate.usageCount < candidate.usageLimit) &&
+          withinPerUserLimit &&
+          (!candidate.minOrderAmount || subtotal >= Number(candidate.minOrderAmount)),
+      );
+      if (eligible && candidate) {
+        coupon = candidate;
+        if (coupon.type === 'PERCENTAGE') {
+          discountAmount = (subtotal * Number(coupon.value)) / 100;
+          if (coupon.maxDiscount != null) {
+            discountAmount = Math.min(discountAmount, Number(coupon.maxDiscount));
           }
+        } else if (coupon.type === 'FIXED') {
+          discountAmount = Math.min(Number(coupon.value), subtotal);
         }
       }
     }
 
-    const shippingAmount = subtotal - discountAmount >= 1999 || coupon?.type === 'FREE_SHIPPING' ? 0 : 99;
+    const shippingAmount =
+      subtotal - discountAmount >= 1999 || coupon?.type === 'FREE_SHIPPING' ? 0 : 99;
     const taxAmount = Math.round((subtotal - discountAmount) * 0.05 * 100) / 100; // 5% GST simplified
     const total = Math.max(0, subtotal - discountAmount + shippingAmount + taxAmount);
 
@@ -221,7 +266,7 @@ export class CartService {
         total: round2(total),
         currency: 'INR',
         itemCount: items.reduce((s, i) => s + i.quantity, 0),
-        couponCode: cart.couponCode,
+        couponCode: coupon?.code || null,
       },
     };
   }

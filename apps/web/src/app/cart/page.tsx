@@ -13,7 +13,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Spinner } from '@/components/ui/spinner';
 
 export default function CartPage() {
-  const { cart, loading, fetchCart, updateItem, removeItem, applyCoupon } = useCartStore();
+  const { cart, loading, error, fetchCart, updateItem, removeItem, applyCoupon } = useCartStore();
+  const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [applying, setApplying] = useState(false);
 
@@ -21,10 +22,42 @@ export default function CartPage() {
     fetchCart().catch(() => undefined);
   }, [fetchCart]);
 
-  if (loading && !cart) {
+  if (!cart && (loading || !error)) {
     return (
       <div className="flex justify-center py-24">
         <Spinner />
+      </div>
+    );
+  }
+
+  const changeQuantity = async (itemId: string, quantity: number) => {
+    setUpdatingItemId(itemId);
+    try {
+      await updateItem(itemId, quantity);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Unable to update quantity');
+    } finally {
+      setUpdatingItemId(null);
+    }
+  };
+
+  const deleteItem = async (itemId: string) => {
+    setUpdatingItemId(itemId);
+    try {
+      await removeItem(itemId);
+      toast.success('Item removed');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Unable to remove item');
+    } finally {
+      setUpdatingItemId(null);
+    }
+  };
+
+  if (error && !cart) {
+    return (
+      <div className="container-px py-16 text-center">
+        <p className="text-sm text-muted-foreground">{error}</p>
+        <Button className="mt-4" onClick={() => fetchCart().catch(() => undefined)}>Try again</Button>
       </div>
     );
   }
@@ -73,19 +106,27 @@ export default function CartPage() {
                   <div className="mt-auto flex items-center justify-between pt-3">
                     <div className="inline-flex items-center rounded-full border border-white/10">
                       <button
-                        className="p-2"
-                        onClick={() => updateItem(item.id, Math.max(0, item.quantity - 1))}
+                        className="p-2 disabled:opacity-40"
+                        disabled={updatingItemId === item.id}
+                        onClick={() => changeQuantity(item.id, Math.max(0, item.quantity - 1))}
+                        aria-label="Decrease quantity"
                       >
                         <Minus className="h-3.5 w-3.5" />
                       </button>
                       <span className="w-8 text-center text-sm">{item.quantity}</span>
-                      <button className="p-2" onClick={() => updateItem(item.id, item.quantity + 1)}>
+                      <button
+                        className="p-2 disabled:opacity-40"
+                        disabled={updatingItemId === item.id || (item.variant ? item.quantity >= item.variant.stock : false)}
+                        onClick={() => changeQuantity(item.id, item.quantity + 1)}
+                        aria-label="Increase quantity"
+                      >
                         <Plus className="h-3.5 w-3.5" />
                       </button>
                     </div>
                     <button
                       className="text-muted-foreground hover:text-red-400"
-                      onClick={() => removeItem(item.id)}
+                      onClick={() => deleteItem(item.id)}
+                      disabled={updatingItemId === item.id}
                       aria-label="Remove"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -134,7 +175,8 @@ export default function CartPage() {
               onClick={async () => {
                 setApplying(true);
                 try {
-                  await applyCoupon(code);
+                  if (!code.trim()) throw new Error('Enter a coupon code');
+                  await applyCoupon(code.trim());
                   toast.success('Coupon applied');
                 } catch (e) {
                   toast.error(e instanceof Error ? e.message : 'Invalid coupon');
@@ -153,9 +195,7 @@ export default function CartPage() {
           <Button asChild className="mt-6 w-full" size="lg">
             <Link href="/checkout">Checkout</Link>
           </Button>
-          <p className="mt-3 text-center text-xs text-muted-foreground">
-            Try VYQOUR10 · FREESHIP · IDENTITY500
-          </p>
+          
         </aside>
       </div>
     </div>

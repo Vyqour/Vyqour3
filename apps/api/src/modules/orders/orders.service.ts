@@ -92,7 +92,7 @@ export class OrdersService {
           shippingAmount: summary.shippingAmount,
           taxAmount: summary.taxAmount,
           total: summary.total,
-          couponCode: summary.couponCode || dto.couponCode,
+          couponCode: summary.couponCode || null,
           shippingAddressId: dto.shippingAddressId,
           billingAddressId: dto.billingAddressId || dto.shippingAddressId,
           notes: dto.notes,
@@ -156,19 +156,40 @@ export class OrdersService {
         // A null usageLimit means unlimited usage. Any failure later in this
         // transaction rolls the claim back automatically.
         const coupon = await tx.coupon.findUnique({ where: { code: summary.couponCode } });
+        const now = new Date();
         if (!coupon || !coupon.isActive) {
           throw new BadRequestException('Invalid coupon');
+        }
+        if (
+          coupon.startsAt > now ||
+          coupon.expiresAt < now ||
+          (coupon.minOrderAmount != null && summary.subtotal < Number(coupon.minOrderAmount))
+        ) {
+          throw new BadRequestException('Coupon is no longer valid for this order');
         }
         const claimed = await tx.coupon.updateMany({
           where: {
             code: summary.couponCode,
             isActive: true,
+            startsAt: { lte: now },
+            expiresAt: { gte: now },
             ...(coupon.usageLimit != null ? { usageCount: { lt: coupon.usageLimit } } : {}),
           },
           data: { usageCount: { increment: 1 } },
         });
         if (!claimed.count) {
           throw new BadRequestException('Coupon usage limit reached');
+        }
+        if (coupon.perUserLimit > 0) {
+          // Count after claiming the coupon row lock. Concurrent checkouts for
+          // the same customer/coupon serialize on that row, so the later
+          // transaction sees the earlier committed order before it can commit.
+          const customerUses = await tx.order.count({
+            where: { userId, couponCode: summary.couponCode },
+          });
+          if (customerUses > coupon.perUserLimit) {
+            throw new BadRequestException('You have already used this coupon the maximum number of times');
+          }
         }
       }
 

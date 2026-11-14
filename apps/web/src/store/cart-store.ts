@@ -7,6 +7,7 @@ import { apiClient } from '@/lib/api';
 interface CartState {
   cart: Cart | null;
   loading: boolean;
+  error: string | null;
   fetchCart: () => Promise<void>;
   addItem: (productId: string, quantity?: number, variantId?: string) => Promise<void>;
   updateItem: (itemId: string, quantity: number) => Promise<void>;
@@ -18,11 +19,15 @@ interface CartState {
 export const useCartStore = create<CartState>((set) => ({
   cart: null,
   loading: false,
+  error: null,
   fetchCart: async () => {
-    set({ loading: true });
+    set({ loading: true, error: null });
     try {
       const cart = await apiClient.get<Cart>('/cart', { session: true });
-      set({ cart });
+      set({ cart, error: null });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Unable to load your bag' });
+      throw error;
     } finally {
       set({ loading: false });
     }

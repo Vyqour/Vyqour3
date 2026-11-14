@@ -139,17 +139,22 @@ export class PaymentsService {
    * Client-side checkout verification (handler callback).
    * Idempotent — safe if webhook already marked PAID.
    */
-  async verifyPayment(payload: {
-    orderId: string;
-    razorpayOrderId: string;
-    razorpayPaymentId: string;
-    razorpaySignature: string;
-  }) {
+  async verifyPayment(
+    payload: {
+      orderId: string;
+      razorpayOrderId: string;
+      razorpayPaymentId: string;
+      razorpaySignature: string;
+    },
+    userId: string,
+  ) {
     const order = await this.prisma.order.findUnique({
       where: { id: payload.orderId },
       include: { payments: true },
     });
-    if (!order) throw new BadRequestException('Order not found');
+    if (!order || order.userId !== userId) {
+      throw new BadRequestException('Order not found');
+    }
 
     // Terminal orders must never be verified or re-enqueued for fulfillment.
     // A late client callback for a RETURNED order would otherwise mark it PAID

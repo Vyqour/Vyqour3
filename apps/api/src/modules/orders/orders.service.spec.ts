@@ -264,6 +264,8 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
         where: {
           code: 'SAVE10',
           isActive: true,
+          startsAt: { lte: expect.any(Date) },
+          expiresAt: { gte: expect.any(Date) },
           usageCount: { lt: 10 },
         },
         data: { usageCount: { increment: 1 } },
@@ -303,7 +305,12 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
       await service.create('user_1', { paymentMethod: PaymentMethod.RAZORPAY, shippingAddressId: 'addr_1' } as any);
 
       expect(mockPrisma.coupon.updateMany).toHaveBeenCalledWith({
-        where: { code: 'UNLIMITED', isActive: true },
+        where: {
+          code: 'UNLIMITED',
+          isActive: true,
+          startsAt: { lte: expect.any(Date) },
+          expiresAt: { gte: expect.any(Date) },
+        },
         data: { usageCount: { increment: 1 } },
       });
     });

@@ -15,6 +15,7 @@ describe('PaymentsService - Production Safety Audit', () => {
 
   const mockOrder = {
     id: 'order_123',
+    userId: 'user_123',
     orderNumber: 'VYQ10001',
     status: OrderStatus.CONFIRMED,
     paymentStatus: PaymentStatus.PENDING,
@@ -74,6 +75,23 @@ describe('PaymentsService - Production Safety Audit', () => {
   });
 
   describe('verifyPayment', () => {
+    it('rejects payment verification when the authenticated customer does not own the order', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({ ...mockOrder, userId: 'another_customer' });
+
+      await expect(
+        service.verifyPayment({
+          orderId: 'order_123',
+          razorpayOrderId: 'order_rzp_123',
+          razorpayPaymentId: 'pay_rzp_456',
+          razorpaySignature: 'not-used',
+        }, 'user_123'),
+      ).rejects.toThrow('Order not found');
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(mockQikink.enqueueOrderSubmission).not.toHaveBeenCalled();
+    });
+
     beforeEach(() => {
       // Mock global fetch for Razorpay API endpoint
       global.fetch = jest.fn().mockResolvedValue({
@@ -103,7 +121,7 @@ describe('PaymentsService - Production Safety Audit', () => {
         razorpayOrderId,
         razorpayPaymentId,
         razorpaySignature,
-      });
+      }, 'user_123');
 
       expect(res.message).toBe('Payment verified');
       expect(mockPrisma.$transaction).toHaveBeenCalled();
@@ -134,7 +152,7 @@ describe('PaymentsService - Production Safety Audit', () => {
           razorpayOrderId,
           razorpayPaymentId,
           razorpaySignature,
-        }),
+        }, 'user_123'),
       ).rejects.toThrow('Failed to verify payment details with Razorpay API (status 404)');
 
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
@@ -167,7 +185,7 @@ describe('PaymentsService - Production Safety Audit', () => {
           razorpayOrderId,
           razorpayPaymentId,
           razorpaySignature,
-        }),
+        }, 'user_123'),
       ).rejects.toThrow('Razorpay payment ID mismatch: expected pay_rzp_456, received pay_rzp_DIFFERENT');
 
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
@@ -201,7 +219,7 @@ describe('PaymentsService - Production Safety Audit', () => {
           razorpayOrderId,
           razorpayPaymentId,
           razorpaySignature,
-        }),
+        }, 'user_123'),
       ).rejects.toThrow('Razorpay payment ID mismatch');
 
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
@@ -225,7 +243,7 @@ describe('PaymentsService - Production Safety Audit', () => {
           razorpayOrderId,
           razorpayPaymentId,
           razorpaySignature,
-        }),
+        }, 'user_123'),
       ).rejects.toThrow('Failed to verify payment details with Razorpay API: Network error');
 
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
@@ -257,7 +275,7 @@ describe('PaymentsService - Production Safety Audit', () => {
           razorpayOrderId,
           razorpayPaymentId,
           razorpaySignature,
-        }),
+        }, 'user_123'),
       ).rejects.toThrow(BadRequestException);
 
       expect(mockQikink.enqueueOrderSubmission).not.toHaveBeenCalled();
@@ -288,7 +306,7 @@ describe('PaymentsService - Production Safety Audit', () => {
           razorpayOrderId,
           razorpayPaymentId,
           razorpaySignature,
-        }),
+        }, 'user_123'),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -317,7 +335,7 @@ describe('PaymentsService - Production Safety Audit', () => {
           razorpayOrderId,
           razorpayPaymentId,
           razorpaySignature,
-        }),
+        }, 'user_123'),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -334,7 +352,7 @@ describe('PaymentsService - Production Safety Audit', () => {
           razorpayOrderId: 'order_rzp_123',
           razorpayPaymentId: 'pay_rzp_456',
           razorpaySignature: 'sig',
-        }),
+        }, 'user_123'),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -349,7 +367,7 @@ describe('PaymentsService - Production Safety Audit', () => {
         razorpayOrderId: 'order_rzp_123',
         razorpayPaymentId: 'pay_rzp_456',
         razorpaySignature: 'sig',
-      });
+      }, 'user_123');
 
       expect(res.duplicate).toBe(true);
       expect(res.message).toBe('Payment already verified');
@@ -368,7 +386,7 @@ describe('PaymentsService - Production Safety Audit', () => {
           razorpayOrderId: 'order_rzp_123',
           razorpayPaymentId: 'pay_rzp_456',
           razorpaySignature: 'invalid_sig',
-        }),
+        }, 'user_123'),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -387,7 +405,7 @@ describe('PaymentsService - Production Safety Audit', () => {
           razorpayOrderId: 'order_rzp_123',
           razorpayPaymentId: 'pay_rzp_456',
           razorpaySignature: 'sig',
-        }),
+        }, 'user_123'),
       ).rejects.toThrow('Cannot verify payment for a cancelled, refunded or returned order');
 
       expect(mockPrisma.$transaction).not.toHaveBeenCalled(); // markOrderPaid never runs
@@ -407,7 +425,7 @@ describe('PaymentsService - Production Safety Audit', () => {
           razorpayOrderId: 'order_rzp_123',
           razorpayPaymentId: 'pay_rzp_456',
           razorpaySignature: 'sig',
-        }),
+        }, 'user_123'),
       ).rejects.toThrow(BadRequestException);
 
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
