@@ -22,7 +22,7 @@ export default function CartPage() {
     fetchCart().catch(() => undefined);
   }, [fetchCart]);
 
-  if (loading && !cart) {
+  if (!cart && (loading || !error)) {
     return (
       <div className="flex justify-center py-24">
         <Spinner />
