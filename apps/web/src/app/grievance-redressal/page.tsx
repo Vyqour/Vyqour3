@@ -29,8 +29,9 @@ export default function GrievanceRedressalPage() {
           <p><strong className="text-white">Legal business name:</strong> [PLACEHOLDER: Legal name of the business operator]</p>
           <p><strong className="text-white">Principal business address:</strong> [PLACEHOLDER: Full business address]</p>
           <p><strong className="text-white">Customer care email:</strong> vyqourofficial@gmail.com</p>
+          <p><strong className="text-white">Customer care phone:</strong> [PLACEHOLDER: Customer care phone number]</p>
           <p><strong className="text-white">Grievance email:</strong> [PLACEHOLDER: Grievance email address]</p>
-          <p><strong className="text-white">Contact number:</strong> [PLACEHOLDER: Business contact number]</p>
+          <p><strong className="text-white">Grievance Officer phone:</strong> [PLACEHOLDER: Grievance Officer phone number]</p>
           <p><strong className="text-white">Postal address:</strong> [PLACEHOLDER: Official business address]</p>
         </div>
 
