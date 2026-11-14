@@ -127,7 +127,10 @@ export default function OrdersPage() {
         script.dataset.loaded = 'true';
         resolve();
       };
-      const onError = () => reject(new Error('Failed to load Razorpay'));
+      const onError = () => {
+        script.remove();
+        reject(new Error('Failed to load Razorpay'));
+      };
       script.addEventListener('load', onLoad, { once: true });
       script.addEventListener('error', onError, { once: true });
       if (!existing) {
