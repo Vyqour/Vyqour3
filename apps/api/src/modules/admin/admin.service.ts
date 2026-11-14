@@ -7,9 +7,15 @@ export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
 
   async dashboard() {
+    // Use UTC boundaries so the same dashboard day is used regardless of
+    // the timezone configured on the API host.
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const revenueWhere = {
+      paymentStatus: PaymentStatus.PAID,
+      status: { notIn: [OrderStatus.CANCELLED, OrderStatus.REFUNDED, OrderStatus.RETURNED] },
+    };
 
     const [
       totalOrders,
@@ -27,14 +33,11 @@ export class AdminService {
       this.prisma.order.count({ where: { createdAt: { gte: startOfDay } } }),
       this.prisma.order.count({ where: { createdAt: { gte: startOfMonth } } }),
       this.prisma.order.aggregate({
-        where: { paymentStatus: { in: [PaymentStatus.PAID, PaymentStatus.PENDING] }, status: { not: OrderStatus.CANCELLED } },
+        where: revenueWhere,
         _sum: { total: true },
       }),
       this.prisma.order.aggregate({
-        where: {
-          createdAt: { gte: startOfMonth },
-          status: { not: OrderStatus.CANCELLED },
-        },
+        where: { ...revenueWhere, createdAt: { gte: startOfMonth } },
         _sum: { total: true },
       }),
       this.prisma.user.count({ where: { role: 'CUSTOMER', status: 'ACTIVE' } }),
@@ -54,29 +57,29 @@ export class AdminService {
       }),
     ]);
 
-    // Last 7 days revenue
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - (6 - i));
-      d.setHours(0, 0, 0, 0);
-      return d;
+    // Last seven UTC calendar days, including today.
+    const days = Array.from({ length: 7 }, (_, index) => {
+      const day = new Date(startOfDay);
+      day.setUTCDate(day.getUTCDate() - (6 - index));
+      return day;
     });
+
     const revenueSeries = await Promise.all(
       days.map(async (day) => {
         const next = new Date(day);
-        next.setDate(next.getDate() + 1);
-        const agg = await this.prisma.order.aggregate({
+        next.setUTCDate(next.getUTCDate() + 1);
+        const aggregate = await this.prisma.order.aggregate({
           where: {
+            ...revenueWhere,
             createdAt: { gte: day, lt: next },
-            status: { not: OrderStatus.CANCELLED },
           },
           _sum: { total: true },
           _count: true,
         });
         return {
           date: day.toISOString().slice(0, 10),
-          revenue: Number(agg._sum.total || 0),
-          orders: agg._count,
+          revenue: Number(aggregate._sum.total || 0),
+          orders: aggregate._count,
         };
       }),
     );
@@ -92,9 +95,9 @@ export class AdminService {
         activeProducts: products,
         lowStockVariants: lowStock,
       },
-      statusBreakdown: statusBreakdown.map((s) => ({
-        status: s.status,
-        count: s._count,
+      statusBreakdown: statusBreakdown.map((status) => ({
+        status: status.status,
+        count: status._count,
       })),
       revenueSeries,
       recentOrders,
