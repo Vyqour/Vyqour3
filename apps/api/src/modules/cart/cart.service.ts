@@ -65,9 +65,6 @@ export class CartService {
     if (!product || product.status !== 'ACTIVE') {
       throw new NotFoundException('Product not available');
     }
-    if (product.status !== 'ACTIVE') {
-      throw new BadRequestException('Product is not available');
-    }
 
     const cart = await this.getOrCreateCart(userId, sessionId);
     const existing = cart.items.find(
