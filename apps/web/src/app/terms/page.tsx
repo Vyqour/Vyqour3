@@ -1,138 +1,149 @@
 import type { Metadata } from 'next';
 
-export const metadata: Metadata = { title: 'Terms & Conditions' };
+export const metadata: Metadata = {
+  title: 'Terms & Conditions',
+  description: 'Terms governing purchases and use of the VYQOUR website.',
+};
 
 export default function Page() {
   return (
     <div className="container-px py-10 md:py-14">
       <p className="text-xs font-semibold uppercase tracking-[0.25em] text-primary-glow">Legal</p>
-      <h1 className="mt-2 text-3xl font-medium md:text-4xl">Terms & Conditions</h1>
+      <h1 className="mt-2 text-3xl font-medium md:text-4xl">Terms &amp; Conditions</h1>
       <div className="prose-invert-custom mt-8 max-w-3xl space-y-4 text-sm leading-relaxed text-muted-foreground">
-
-        <p>Last updated: July 2026</p>
+        <p>Last updated: November 2026</p>
         <p>
-          These Terms & Conditions (&quot;Terms&quot;) govern your use of vyqour.com and any purchase you
-          make from VYQOUR (&quot;VYQOUR&quot;, &quot;we&quot;, &quot;us&quot;, &quot;our&quot;). VYQOUR is an unregistered
-          partnership run by three founders, based in India. By browsing this website, creating an
-          account, or placing an order, you (&quot;User&quot;, &quot;you&quot;) agree to be bound by these Terms.
-          Please read them carefully before using our services. VYQOUR reserves the right to update
-          these Terms at any time; continued use of the website after changes are posted constitutes
-          acceptance of the revised Terms.
+          These Terms &amp; Conditions ("Terms") govern your access to and use of the VYQOUR website
+          and purchases made through it. "VYQOUR", "we", "us" and "our" refer to the business
+          operating the VYQOUR brand in India. By using the website or placing an order, you agree
+          to these Terms. If you do not agree, please do not use the website.
         </p>
 
-        <h2 className="text-white text-lg font-medium">1. Eligibility</h2>
+        <h2 className="text-white text-lg font-medium">1. Eligibility and account information</h2>
         <p>
-          You must be at least 18 years old, or accessing the website under the supervision of a
-          parent or legal guardian, to place an order. By using VYQOUR, you represent that you meet
-          this requirement and that the information you provide is accurate and complete.
+          You must be legally capable of entering into a purchase transaction. If you are under 18,
+          a parent or lawful guardian must be involved in your use of the website and any purchase.
+          You must provide accurate, current contact and delivery information and keep your account
+          credentials confidential. Contact us promptly if you suspect unauthorised account access.
         </p>
 
-        <h2 className="text-white text-lg font-medium">2. About our products</h2>
+        <h2 className="text-white text-lg font-medium">2. Products and product information</h2>
         <p>
-          VYQOUR products feature original, in-house designs created specifically for our brand. Each
-          item is made to order once you place your purchase — we work with a manufacturing and
-          printing partner to produce and dispatch your order rather than holding pre-made stock.
-          Because of this, minor variations in print placement, color, or fabric texture between
-          production batches are normal and do not indicate a defect.
+          VYQOUR offers apparel and accessories featuring designs selected for the brand. Products
+          may be produced or prepared after an order is placed through our fulfilment partners.
+          Product pages contain the relevant descriptions, size information, available colours and
+          other specifications. Please review these details before ordering. Screen settings,
+          materials and production processes can cause minor differences in colour or appearance;
+          this does not limit your rights if an item is defective, damaged or materially different
+          from its description.
         </p>
 
-        <h2 className="text-white text-lg font-medium">3. Account registration</h2>
+        <h2 className="text-white text-lg font-medium">3. Orders and acceptance</h2>
         <p>
-          To place an order, you will need to create an account with a valid email address and
-          password. You are responsible for maintaining the confidentiality of your login credentials
-          and for all activity that occurs under your account. Notify us immediately at{' '}
-          vyqourofficial@gmail.com if you suspect any unauthorized use of your account.
+          When you submit an order, you are making an offer to purchase the selected products.
+          We may contact you to verify order or delivery details. An order is accepted when we
+          confirm it through the website or an order-confirmation communication. We may decline or
+          cancel an order where there is a genuine reason, such as an item being unavailable,
+          an obvious pricing/listing error, suspected fraud or inability to deliver. If we cancel
+          an accepted order after payment, we will initiate an appropriate refund.
         </p>
 
-        <h2 className="text-white text-lg font-medium">4. Orders and acceptance</h2>
+        <h2 className="text-white text-lg font-medium">4. Prices, taxes and payment</h2>
         <p>
-          Placing an order on VYQOUR is an offer to purchase, which we accept once your payment is
-          confirmed and your order status changes to &quot;Confirmed.&quot; We reserve the right to cancel or
-          refuse any order — including after payment — in cases of suspected fraud, pricing or listing
-          errors, or inability to fulfil the order, and will refund any amount already paid in such
-          cases.
+          Prices are displayed in Indian Rupees (INR). Applicable shipping charges, taxes and other
+          mandatory amounts, if any, will be shown before you place the order. Payment methods may
+          include online payment through the payment provider displayed at checkout and Cash on
+          Delivery where available. An order requiring online payment will be processed after
+          payment confirmation. Never share your card PIN, UPI PIN, password or one-time password
+          with anyone claiming to represent VYQOUR.
         </p>
 
-        <h2 className="text-white text-lg font-medium">5. Pricing and payments</h2>
+        <h2 className="text-white text-lg font-medium">5. Shipping and delivery</h2>
         <p>
-          All prices are listed in Indian Rupees (INR) and are inclusive of applicable taxes unless
-          stated otherwise. We accept payment via Razorpay (UPI, cards, netbanking, wallets) and Cash
-          on Delivery (COD) where available. We do not store your card or bank details — payments are
-          processed securely by our payment partner, Razorpay, under its own security standards.
+          Delivery is available only to serviceable locations. Production, dispatch and delivery
+          estimates, tracking information and shipping charges are described in our{' '}
+          <a href="/shipping-policy" className="text-primary-glow underline">Shipping Policy</a>{' '}
+          and displayed during checkout where applicable. Delivery estimates are not guaranteed;
+          however, this does not remove any consumer rights available under applicable law.
         </p>
 
-        <h2 className="text-white text-lg font-medium">6. Shipping and delivery</h2>
+        <h2 className="text-white text-lg font-medium">6. Cancellations, returns and refunds</h2>
         <p>
-          Orders are shipped across India through our logistics and fulfilment partner. Estimated
-          production, dispatch, and delivery timelines are described on our{' '}
-          <a href="/shipping-policy" className="text-primary-glow underline">Shipping Policy</a> page.
-          These timelines are estimates and not guaranteed; delays due to courier networks, weather,
-          or regional disruptions are outside our control.
+          Our cancellation, return, replacement and refund process is explained in the{' '}
+          <a href="/refund" className="text-primary-glow underline">Refund Policy</a>. Some
+          made-to-order items may not be eligible for a change-of-mind return once production has
+          started, but nothing in these Terms excludes remedies available under consumer protection
+          law, including where a product is defective, deficient, damaged, spurious, not as described
+          or delivered later than the promised time without a legally recognised exception.
         </p>
 
-        <h2 className="text-white text-lg font-medium">7. Returns, replacements, and refunds</h2>
-        <p>
-          Because our products are made to order with custom designs, we do not accept returns for
-          reasons of personal preference (such as wrong size chosen or change of mind). We offer
-          replacements for items that arrive damaged, defective, or incorrect, and handle undelivered
-          shipments as described in our{' '}
-          <a href="/refund" className="text-primary-glow underline">Refund Policy</a> page.
-        </p>
-
-        <h2 className="text-white text-lg font-medium">8. Prohibited conduct</h2>
+        <h2 className="text-white text-lg font-medium">7. Acceptable use</h2>
         <p>You agree not to:</p>
         <ul className="list-disc space-y-2 pl-5">
-          <li>Attempt unauthorized access to our website, systems, or other users&apos; accounts.</li>
-          <li>Submit fraudulent orders, false information, or unauthorized payment details.</li>
-          <li>Copy, reproduce, or resell VYQOUR designs, content, or product photography without permission.</li>
-          <li>Use the website in any way that could disrupt, damage, or harm VYQOUR, its partners, or other users.</li>
+          <li>Use the website for unlawful, fraudulent or misleading activity.</li>
+          <li>Attempt to access accounts, systems or data without authorisation.</li>
+          <li>Interfere with the security, availability or operation of the website.</li>
+          <li>Upload malicious code or submit another person's personal information without authority.</li>
+          <li>Copy, reproduce or commercially use VYQOUR's protected designs, branding or content without permission.</li>
         </ul>
 
-        <h2 className="text-white text-lg font-medium">9. Intellectual property</h2>
+        <h2 className="text-white text-lg font-medium">8. Intellectual property</h2>
         <p>
-          All VYQOUR designs, graphics, logos, product photography, and site content are original
-          works owned by VYQOUR or licensed to us, and are protected under Indian copyright and
-          trademark law. You may not reproduce, resell, or repurpose our designs or content without
-          our prior written permission.
+          The VYQOUR name, logos, original designs, graphics, website text and other brand materials
+          are owned by VYQOUR or used with permission, and may be protected by applicable intellectual
+          property laws. You may not reproduce or commercially exploit these materials without prior
+          written permission, except where the law permits.
         </p>
 
-        <h2 className="text-white text-lg font-medium">10. Limitation of liability</h2>
+        <h2 className="text-white text-lg font-medium">9. Website availability</h2>
         <p>
-          VYQOUR is not liable for indirect, incidental, or consequential damages arising from the use
-          of our website or products, to the maximum extent permitted by Indian law. Our total
-          liability for any claim is limited to the amount paid for the relevant order. We make no
-          warranty that the website will be error-free or uninterrupted at all times.
+          We aim to keep the website available and accurate, but maintenance, technical issues or
+          events outside our reasonable control may interrupt access. We may update product
+          information or website features. We will not use this provision to avoid obligations
+          arising from an order already accepted or rights provided by law.
         </p>
 
-        <h2 className="text-white text-lg font-medium">11. Termination</h2>
+        <h2 className="text-white text-lg font-medium">10. Liability</h2>
         <p>
-          We may suspend or terminate your account if we reasonably believe you have violated these
-          Terms, engaged in fraudulent activity, or misused our website. You may also request deletion
-          of your account at any time by contacting us.
+          To the extent permitted by applicable law, VYQOUR is not responsible for indirect losses
+          that could not reasonably have been anticipated. Nothing in these Terms limits liability
+          or remedies that cannot lawfully be excluded, including statutory consumer rights.
         </p>
 
-        <h2 className="text-white text-lg font-medium">12. Governing law and jurisdiction</h2>
+        <h2 className="text-white text-lg font-medium">11. Suspension and account closure</h2>
         <p>
-          These Terms are governed by the laws of India. Any disputes arising from these Terms or your
-          use of VYQOUR will be subject to the exclusive jurisdiction of courts in India.
+          We may restrict or suspend access where reasonably necessary to protect the website,
+          customers or business from fraud, security threats or serious misuse. You may contact us
+          to request account closure. Closing an account does not remove records we are legally
+          required or otherwise permitted to retain.
+        </p>
+
+        <h2 className="text-white text-lg font-medium">12. Governing law and disputes</h2>
+        <p>
+          These Terms are governed by the laws of India. Disputes are subject to the jurisdiction
+          of competent courts and consumer dispute forums under applicable law. Nothing in this
+          clause takes away a consumer's right to approach a competent consumer commission or
+          authority.
         </p>
 
         <h2 className="text-white text-lg font-medium">13. Changes to these Terms</h2>
         <p>
-          We may update these Terms from time to time to reflect changes in our business or applicable
-          law. The updated version will be posted on this page with a revised &quot;Last updated&quot; date.
+          We may revise these Terms from time to time. The latest version will be posted on this
+          page with its updated date. Changes will not retrospectively remove rights or obligations
+          relating to an order already accepted.
         </p>
 
-        <h2 className="text-white text-lg font-medium">14. Contact us</h2>
+        <h2 className="text-white text-lg font-medium">14. Contact</h2>
         <p>
-          For any questions about these Terms, reach us at{' '}
+          For questions about these Terms or an order, contact{' '}
           <a href="mailto:vyqourofficial@gmail.com" className="text-primary-glow underline">
             vyqourofficial@gmail.com
           </a>
-          .
+          . For formal consumer complaints, visit our{' '}
+          <a href="/grievance-redressal" className="text-primary-glow underline">Grievance Redressal</a>{' '}
+          page.
         </p>
-
       </div>
     </div>
   );
-      }
+}
