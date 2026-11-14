@@ -179,6 +179,17 @@ export class OrdersService {
         if (!claimed.count) {
           throw new BadRequestException('Coupon usage limit reached');
         }
+        if (coupon.perUserLimit > 0) {
+          // Count after claiming the coupon row lock. Concurrent checkouts for
+          // the same customer/coupon serialize on that row, so the later
+          // transaction sees the earlier committed order before it can commit.
+          const customerUses = await tx.order.count({
+            where: { userId, couponCode: summary.couponCode },
+          });
+          if (customerUses > coupon.perUserLimit) {
+            throw new BadRequestException('You have already used this coupon the maximum number of times');
+          }
+        }
       }
 
       // Clear cart
