@@ -24,8 +24,8 @@ export default function Page() {
           information before publishing this policy.
         </p>
         <p>
-          These Terms &amp; Conditions ("Terms") govern your access to and use of the VYQOUR website
-          and purchases made through it. "VYQOUR", "we", "us" and "our" refer to the business
+          These Terms &amp; Conditions (&quot;Terms&quot;) govern your access to and use of the VYQOUR website
+          and purchases made through it. &quot;VYQOUR&quot;, &quot;we&quot;, &quot;us&quot; and &quot;our&quot; refer to the business
           operating the VYQOUR brand in India. By using the website or placing an order, you agree
           to these Terms. If you do not agree, please do not use the website.
         </p>
@@ -95,7 +95,7 @@ export default function Page() {
           <li>Attempt to access accounts, systems or data without authorisation.</li>
           <li>Interfere with the security, availability or operation of the website.</li>
           <li>Upload malicious code or submit another person's personal information without authority.</li>
-          <li>Copy, reproduce or commercially use VYQOUR's protected designs, branding or content without permission.</li>
+          <li>Copy, reproduce or commercially use VYQOUR&apos;s protected designs, branding or content without permission.</li>
         </ul>
 
         <h2 className="text-white text-lg font-medium">8. Intellectual property</h2>
@@ -133,7 +133,7 @@ export default function Page() {
         <p>
           These Terms are governed by the laws of India. Disputes are subject to the jurisdiction
           of competent courts and consumer dispute forums under applicable law. Nothing in this
-          clause takes away a consumer's right to approach a competent consumer commission or
+          clause takes away a consumer&apos;s right to approach a competent consumer commission or
           authority.
         </p>
 
