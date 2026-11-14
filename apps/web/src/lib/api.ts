@@ -101,7 +101,7 @@ async function refreshAccessToken(): Promise<string | null> {
     }
     // Refresh cookies are rotated by the API. Keep the access token only in
     // memory for this retry; do not persist password-login tokens in localStorage.
-    if (refresh) setTokens(null, data.refreshToken);
+    if (refresh) setTokens(data.accessToken, data.refreshToken);
     return data.accessToken as string;
   } catch {
     clearTokens();
