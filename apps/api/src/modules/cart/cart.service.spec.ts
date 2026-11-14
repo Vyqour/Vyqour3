@@ -51,6 +51,7 @@ describe('CartService stock and coupon safeguards', () => {
         deleteMany: jest.fn(),
       },
       coupon: { findUnique: jest.fn().mockResolvedValue(null) },
+      order: { count: jest.fn().mockResolvedValue(0) },
     };
     service = new CartService(prisma);
   });
@@ -92,6 +93,27 @@ describe('CartService stock and coupon safeguards', () => {
 
     expect(result.summary.shippingAmount).toBe(99);
     expect(result.summary.couponCode).toBeNull();
+  });
+
+  it('rejects a coupon after the customer has reached its per-user usage limit', async () => {
+    prisma.coupon.findUnique.mockResolvedValue({
+      code: 'ONCE',
+      type: 'PERCENTAGE',
+      value: 10,
+      isActive: true,
+      startsAt: new Date(Date.now() - 60_000),
+      expiresAt: new Date(Date.now() + 60_000),
+      usageLimit: null,
+      usageCount: 0,
+      perUserLimit: 1,
+      minOrderAmount: null,
+    });
+    prisma.order.count.mockResolvedValue(1);
+
+    await expect(service.applyCoupon('ONCE', 'user_1')).rejects.toThrow(
+      'You have already used this coupon the maximum number of times',
+    );
+    expect(prisma.cart.update).not.toHaveBeenCalled();
   });
 
   it('rejects applying a coupon before its start time', async () => {
