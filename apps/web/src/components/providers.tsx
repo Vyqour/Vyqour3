@@ -14,12 +14,11 @@ function AuthBootstrap({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    const token = typeof window !== 'undefined' ? localStorage.getItem('vyqour_access') : null;
-    if (token) {
-      fetchMe().then((u) => {
-        if (u) fetchWish().catch(() => undefined);
-      });
-    }
+    // Revalidate the persisted account against the API on every app load.
+    // Password sessions use HttpOnly cookies and therefore have no local token.
+    fetchMe().then((u) => {
+      if (u) fetchWish().catch(() => undefined);
+    });
   }, [hydrated, fetchMe, fetchWish]);
 
   useEffect(() => {
