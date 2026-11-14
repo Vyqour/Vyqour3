@@ -13,7 +13,7 @@ export default function Page() {
       <div className="prose-invert-custom mt-8 max-w-3xl space-y-4 text-sm leading-relaxed text-muted-foreground">
         <p>Last updated: November 2026</p>
         <p>
-          This Privacy Policy explains how VYQOUR ("VYQOUR", "we", "us" or "our") collects, uses,
+          This Privacy Policy explains how VYQOUR (&quot;VYQOUR&quot;, &quot;we&quot;, &quot;us&quot; or &quot;our&quot;) collects, uses,
           shares and protects personal information when you visit our website, create an account,
           contact us or place an order in India. We handle personal information for specific
           business purposes and in accordance with applicable law.
@@ -105,7 +105,7 @@ export default function Page() {
         <p>
           Our website is not intended for independent use by children under 18. A person under 18
           should use the website and place orders only with the involvement and permission of a
-          parent or lawful guardian. We do not knowingly seek to collect children's personal data
+          parent or lawful guardian. We do not knowingly seek to collect children&apos;s personal data
           without the consent required by applicable law.
         </p>
 
