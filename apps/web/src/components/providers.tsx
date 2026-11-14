@@ -13,13 +13,13 @@ function AuthBootstrap({ children }: { children: React.ReactNode }) {
   const fetchWish = useWishlistStore((s) => s.fetch);
 
   useEffect(() => {
-    if (!hydrated) return;
-    // Revalidate the persisted account against the API on every app load.
+    if (!hydrated || !user) return;
+    // Revalidate a persisted account against the API on app load.
     // Password sessions use HttpOnly cookies and therefore have no local token.
     fetchMe().then((u) => {
       if (u) fetchWish().catch(() => undefined);
     });
-  }, [hydrated, fetchMe, fetchWish]);
+  }, [hydrated, user, fetchMe, fetchWish]);
 
   useEffect(() => {
     if (user) fetchWish().catch(() => undefined);
