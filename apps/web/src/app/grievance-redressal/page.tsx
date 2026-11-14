@@ -26,7 +26,10 @@ export default function GrievanceRedressalPage() {
           <p><strong className="text-white">Name:</strong> [PLACEHOLDER: Grievance Officer full name]</p>
           <p><strong className="text-white">Designation:</strong> Grievance Officer</p>
           <p><strong className="text-white">Business:</strong> VYQOUR</p>
-          <p><strong className="text-white">Email:</strong> [PLACEHOLDER: Grievance email address]</p>
+          <p><strong className="text-white">Legal business name:</strong> [PLACEHOLDER: Legal name of the business operator]</p>
+          <p><strong className="text-white">Principal business address:</strong> [PLACEHOLDER: Full business address]</p>
+          <p><strong className="text-white">Customer care email:</strong> vyqourofficial@gmail.com</p>
+          <p><strong className="text-white">Grievance email:</strong> [PLACEHOLDER: Grievance email address]</p>
           <p><strong className="text-white">Contact number:</strong> [PLACEHOLDER: Business contact number]</p>
           <p><strong className="text-white">Postal address:</strong> [PLACEHOLDER: Official business address]</p>
         </div>
@@ -47,9 +50,10 @@ export default function GrievanceRedressalPage() {
 
         <h2 className="text-white text-lg font-medium">Acknowledgement and resolution</h2>
         <p>
-          We will acknowledge receipt of your complaint within 48 hours and endeavour to resolve it
-          within one month from the date of receipt, in accordance with applicable consumer
-          protection requirements.
+          We will acknowledge receipt of your complaint within 48 hours, provide you with a copy
+          of the complaint as recorded by the Grievance Officer, and redress the complaint within
+          one month from the date of receipt, in accordance with applicable consumer protection
+          requirements.
         </p>
 
         <h2 className="text-white text-lg font-medium">Other support</h2>
