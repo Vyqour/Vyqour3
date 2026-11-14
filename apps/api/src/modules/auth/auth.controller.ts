@@ -1,11 +1,15 @@
 import {
   Body,
+  CanActivate,
   Controller,
   Get,
   HttpCode,
+  Injectable,
   Post,
   Req,
   Res,
+  ServiceUnavailableException,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
@@ -31,6 +35,37 @@ import { Throttle } from '@nestjs/throttler';
  * Cross-site (web :3000 → api :4000 on different hosts) needs SameSite=None; Secure.
  * Codespaces always serves HTTPS, so Secure is safe there even when NODE_ENV=development.
  */
+@Injectable()
+export class GoogleConfiguredGuard implements CanActivate {
+  constructor(private readonly config: ConfigService) {}
+
+  canActivate() {
+    const clientId = this.config.get<string>('google.clientId');
+    const clientSecret = this.config.get<string>('google.clientSecret');
+    const callbackUrl = this.config.get<string>('google.callbackUrl');
+    const webUrl = this.config.get<string>('webUrl');
+    let validUrls = false;
+    try {
+      const callback = new URL(callbackUrl || '');
+      const web = new URL(webUrl || '');
+      validUrls =
+        ['http:', 'https:'].includes(callback.protocol) &&
+        ['http:', 'https:'].includes(web.protocol) &&
+        (this.config.get<string>('nodeEnv') !== 'production' ||
+          (callback.protocol === 'https:' && web.protocol === 'https:'));
+    } catch {
+      validUrls = false;
+    }
+    const configured = Boolean(clientId && clientSecret && validUrls);
+    if (!configured) {
+      throw new ServiceUnavailableException(
+        'Google sign-in is not configured. Please use email and password or contact support.',
+      );
+    }
+    return true;
+  }
+}
+
 function cookieBase(req: Request): CookieOptions {
   const host = (req.hostname || '').toLowerCase();
   const xfProto = String(req.headers['x-forwarded-proto'] || '')
@@ -91,6 +126,7 @@ export class AuthController {
   ) {}
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('register')
   @ApiOperation({ summary: 'Register with email & password' })
   async register(
@@ -104,6 +140,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('login')
   @HttpCode(200)
   @ApiOperation({ summary: 'Login' })
@@ -130,7 +167,7 @@ export class AuthController {
   ) {
     const token = dto.refreshToken || (req.cookies?.refresh_token as string | undefined);
     if (!token) {
-      return { success: false, message: 'No refresh token' };
+      throw new UnauthorizedException('Refresh token is missing or expired');
     }
     const result = await this.auth.refresh(token);
     setAuthCookies(req, res, result.accessToken, result.refreshToken);
@@ -171,6 +208,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('reset-password')
   @HttpCode(200)
   async resetPassword(@Body() dto: ResetPasswordDto) {
@@ -178,6 +216,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('verify-email')
   @HttpCode(200)
   async verifyEmail(@Body() dto: VerifyEmailDto) {
@@ -199,14 +238,14 @@ export class AuthController {
 
   @Public()
   @Get('google')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleConfiguredGuard, AuthGuard('google'))
   async googleAuth() {
     /* redirect handled by passport */
   }
 
   @Public()
   @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleConfiguredGuard, AuthGuard('google'))
   async googleCallback(@Req() req: Request, @Res() res: Response) {
     const profile = req.user as {
       googleId: string;
@@ -214,11 +253,18 @@ export class AuthController {
       firstName: string;
       lastName?: string;
       avatarUrl?: string;
+      emailVerified?: boolean;
     };
     const result = await this.auth.validateGoogleUser(profile);
     setAuthCookies(req, res, result.accessToken, result.refreshToken);
     const webUrl = this.config.get<string>('webUrl') || 'http://localhost:3000';
-    const redirect = `${webUrl}/auth/callback?accessToken=${result.accessToken}&refreshToken=${result.refreshToken}`;
+    // OAuth tokens go in the URL fragment, never the query string. Fragments
+    // are not sent to the web server or included in HTTP Referer headers.
+    const fragment = new URLSearchParams({
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+    }).toString();
+    const redirect = `${webUrl}/auth/callback#${fragment}`;
     return res.redirect(redirect);
   }
 }

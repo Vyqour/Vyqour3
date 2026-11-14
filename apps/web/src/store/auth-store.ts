@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User } from '@/types';
-import { apiClient, clearTokens, setTokens } from '@/lib/api';
+import { apiClient, clearTokens } from '@/lib/api';
 
 interface AuthState {
   user: User | null;
@@ -51,10 +51,8 @@ export const useAuthStore = create<AuthState>()(
           raw && typeof raw === 'object' && 'data' in raw && raw.data && 'accessToken' in raw.data
             ? raw.data
             : (raw as { user: User; accessToken: string; refreshToken: string });
-        if (!res?.accessToken || !res?.user) {
-          throw new Error('Login succeeded but tokens were missing from the response');
-        }
-        setTokens(res.accessToken, res.refreshToken);
+        if (!res?.user) throw new Error('Login response did not include the customer account');
+        clearTokens();
         set({ user: res.user });
         // Merge guest session cart into the authenticated user cart
         try {
@@ -94,10 +92,8 @@ export const useAuthStore = create<AuthState>()(
           raw && typeof raw === 'object' && 'data' in raw && raw.data && 'accessToken' in raw.data
             ? raw.data
             : (raw as { user: User; accessToken: string; refreshToken: string });
-        if (!res?.accessToken || !res?.user) {
-          throw new Error('Registration succeeded but tokens were missing from the response');
-        }
-        setTokens(res.accessToken, res.refreshToken);
+        if (!res?.user) throw new Error('Registration response did not include the customer account');
+        clearTokens();
         set({ user: res.user });
         try {
           const sid =

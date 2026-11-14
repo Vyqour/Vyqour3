@@ -274,35 +274,55 @@ export class AuthService {
     avatarUrl?: string;
     emailVerified?: boolean;
   }) {
-    if (!profile.email) throw new BadRequestException('Google account has no email');
-    let user = await this.prisma.user.findFirst({
-      where: {
-        OR: [{ googleId: profile.googleId }, { email: profile.email.toLowerCase() }],
-      },
-    });
-    if (!user) {
-      user = await this.prisma.user.create({
-        data: {
-          email: profile.email.toLowerCase(),
-          googleId: profile.googleId,
-          firstName: profile.firstName,
-          lastName: profile.lastName,
-          avatarUrl: profile.avatarUrl,
-          emailVerified: true,
-          emailVerifiedAt: new Date(),
-        },
-      });
-    } else if (!user.googleId) {
-      user = await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          googleId: profile.googleId,
-          emailVerified: true,
-          emailVerifiedAt: user.emailVerifiedAt || new Date(),
-          avatarUrl: user.avatarUrl || profile.avatarUrl,
-        },
-      });
+    const email = profile.email?.trim().toLowerCase();
+    if (!email) throw new BadRequestException('Google account has no email');
+    if (profile.emailVerified !== true) {
+      throw new UnauthorizedException('Google email address is not verified');
     }
+
+    // Resolve the Google identity first. Only link by email after Google has
+    // supplied a verified email claim, preventing unverified account takeover.
+    let user = await this.prisma.user.findUnique({
+      where: { googleId: profile.googleId },
+    });
+
+    if (!user) {
+      const emailUser = await this.prisma.user.findUnique({ where: { email } });
+      if (emailUser) {
+        if (emailUser.status !== 'ACTIVE') {
+          throw new UnauthorizedException('Account is inactive');
+        }
+        if (emailUser.googleId && emailUser.googleId !== profile.googleId) {
+          throw new ConflictException('This email is linked to another Google account');
+        }
+        user = await this.prisma.user.update({
+          where: { id: emailUser.id },
+          data: {
+            googleId: profile.googleId,
+            emailVerified: true,
+            emailVerifiedAt: emailUser.emailVerifiedAt || new Date(),
+            avatarUrl: emailUser.avatarUrl || profile.avatarUrl,
+          },
+        });
+      } else {
+        user = await this.prisma.user.create({
+          data: {
+            email,
+            googleId: profile.googleId,
+            firstName: profile.firstName,
+            lastName: profile.lastName,
+            avatarUrl: profile.avatarUrl,
+            emailVerified: true,
+            emailVerifiedAt: new Date(),
+          },
+        });
+      }
+    }
+
+    if (user.status !== 'ACTIVE') {
+      throw new UnauthorizedException('Account is inactive');
+    }
+
     const accessToken = this.signAccess(user);
     const refreshToken = await this.issueRefreshToken(user.id);
     return { user: this.sanitize(user), accessToken, refreshToken };

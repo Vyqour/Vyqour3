@@ -1,22 +1,32 @@
 'use client';
 
 import { Suspense, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { setTokens } from '@/lib/api';
 import { useAuthStore } from '@/store/auth-store';
 import { Spinner } from '@/components/ui/spinner';
 
 function Callback() {
-  const sp = useSearchParams();
   const router = useRouter();
   const fetchMe = useAuthStore((s) => s.fetchMe);
 
   useEffect(() => {
-    const access = sp.get('accessToken');
-    const refresh = sp.get('refreshToken');
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const access = params.get('accessToken');
+    const refresh = params.get('refreshToken');
+
+    // Remove credentials from the visible URL/history immediately after reading.
+    window.history.replaceState(
+      {},
+      document.title,
+      window.location.pathname + window.location.search,
+    );
+
     if (access) setTokens(access, refresh);
-    fetchMe().finally(() => router.replace('/account'));
-  }, [sp, fetchMe, router]);
+    fetchMe().then((user) => {
+      router.replace(user ? '/account' : '/login?error=google_auth_failed');
+    });
+  }, [fetchMe, router]);
 
   return (
     <div className="flex flex-col items-center gap-3 py-24">

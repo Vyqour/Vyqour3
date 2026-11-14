@@ -82,13 +82,12 @@ function networkErrorMessage(err: unknown): string {
 async function refreshAccessToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
   const refresh = localStorage.getItem('vyqour_refresh');
-  if (!refresh) return null;
   try {
     const res = await fetch(`${API_URL}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ refreshToken: refresh }),
+      body: JSON.stringify(refresh ? { refreshToken: refresh } : {}),
     });
     if (!res.ok) {
       clearTokens();
@@ -96,7 +95,13 @@ async function refreshAccessToken(): Promise<string | null> {
     }
     const json = await res.json();
     const data = json.data || json;
-    setTokens(data.accessToken, data.refreshToken);
+    if (!data?.accessToken || !data?.refreshToken) {
+      clearTokens();
+      return null;
+    }
+    // Refresh cookies are rotated by the API. Keep the access token only in
+    // memory for this retry; do not persist password-login tokens in localStorage.
+    if (refresh) setTokens(data.accessToken, data.refreshToken);
     return data.accessToken as string;
   } catch {
     clearTokens();
