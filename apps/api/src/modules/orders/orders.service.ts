@@ -157,9 +157,10 @@ export class OrdersService {
         // transaction rolls the claim back automatically.
         const coupon = await tx.coupon.findUnique({ where: { code: summary.couponCode } });
         const now = new Date();
+        if (!coupon || !coupon.isActive) {
+          throw new BadRequestException('Invalid coupon');
+        }
         if (
-          !coupon ||
-          !coupon.isActive ||
           coupon.startsAt > now ||
           coupon.expiresAt < now ||
           (coupon.minOrderAmount != null && summary.subtotal < Number(coupon.minOrderAmount))
