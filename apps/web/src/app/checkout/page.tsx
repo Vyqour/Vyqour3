@@ -17,12 +17,15 @@ export default function CheckoutPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const hydrated = useAuthStore((s) => s.hydrated);
-  const { cart, fetchCart } = useCartStore();
+  const { cart, fetchCart, loading: cartLoading, error: cartError } = useCartStore();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [addressId, setAddressId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'RAZORPAY'>('COD');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [addressLoading, setAddressLoading] = useState(false);
+  const [addressError, setAddressError] = useState<string | null>(null);
   const [newAddr, setNewAddr] = useState({
     fullName: '',
     phone: '',
@@ -44,6 +47,8 @@ export default function CheckoutPage() {
       router.push('/login?next=/checkout');
       return;
     }
+    setAddressLoading(true);
+    setAddressError(null);
     apiClient
       .get<Address[]>('/addresses', { auth: true })
       .then((list) => {
@@ -52,18 +57,42 @@ export default function CheckoutPage() {
         if (def) setAddressId(def.id);
         if (!list.length) setShowNew(true);
       })
-      .catch(() => undefined);
+      .catch((error) => {
+        setAddressError(error instanceof Error ? error.message : 'Unable to load saved addresses');
+      })
+      .finally(() => setAddressLoading(false));
   }, [user, hydrated, router]);
 
   const saveAddress = async () => {
+    const required = [newAddr.fullName, newAddr.phone, newAddr.line1, newAddr.city, newAddr.state, newAddr.postalCode];
+    if (required.some((value) => !value.trim())) {
+      toast.error('Complete all required address fields');
+      return;
+    }
+    if (!/^\\d{10}$/.test(newAddr.phone.replace(/\\D/g, ''))) {
+      toast.error('Enter a valid 10-digit phone number');
+      return;
+    }
+    if (!/^\\d{6}$/.test(newAddr.postalCode.trim())) {
+      toast.error('Enter a valid 6-digit PIN code');
+      return;
+    }
+    setSavingAddress(true);
     try {
-      const addr = await apiClient.post<Address>('/addresses', { ...newAddr, isDefault: true }, { auth: true });
+      const addr = await apiClient.post<Address>(
+        '/addresses',
+        { ...newAddr, fullName: newAddr.fullName.trim(), phone: newAddr.phone.replace(/\\D/g, ''), line1: newAddr.line1.trim(), line2: newAddr.line2.trim() || undefined, city: newAddr.city.trim(), state: newAddr.state.trim(), postalCode: newAddr.postalCode.trim(), country: 'India', isDefault: true },
+        { auth: true },
+      );
       setAddresses((a) => [...a, addr]);
       setAddressId(addr.id);
       setShowNew(false);
+      setAddressError(null);
       toast.success('Address saved');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed');
+      toast.error(e instanceof Error ? e.message : 'Unable to save address');
+    } finally {
+      setSavingAddress(false);
     }
   };
 
@@ -81,7 +110,7 @@ export default function CheckoutPage() {
         },
         { auth: true },
       );
-      await fetchCart();
+      fetchCart().catch(() => undefined);
       if (paymentMethod === 'RAZORPAY') {
         try {
           const pay = await apiClient.post<{
@@ -113,7 +142,8 @@ export default function CheckoutPage() {
             await openRazorpayCheckout(pay, order, user);
           }
         } catch (e) {
-          toast.error(e instanceof Error ? e.message : 'Payment failed to start');
+          toast.error(e instanceof Error ? e.message : 'Payment could not start. You can retry from your orders.');
+          router.push(`/orders?highlight=${order.orderNumber}`);
           setLoading(false);
         }
         return;
@@ -141,8 +171,7 @@ export default function CheckoutPage() {
     const RazorpayCtor = (window as unknown as { Razorpay?: new (opts: object) => { open: () => void } })
       .Razorpay;
     if (!RazorpayCtor) {
-      toast.error('Unable to load payment gateway. Please try again.');
-      return;
+      throw new Error('Unable to load payment gateway. Please try again.');
     }
 
     const rzp = new RazorpayCtor({
@@ -193,19 +222,48 @@ export default function CheckoutPage() {
 
   const loadRazorpayScript = (): Promise<void> =>
     new Promise((resolve, reject) => {
-      if (document.getElementById('razorpay-checkout-js')) return resolve();
-      const script = document.createElement('script');
-      script.id = 'razorpay-checkout-js';
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Failed to load Razorpay'));
-      document.body.appendChild(script);
+      const existing = document.getElementById('razorpay-checkout-js') as HTMLScriptElement | null;
+      if (existing?.dataset.loaded === 'true') return resolve();
+      const script = existing || document.createElement('script');
+      const onLoad = () => {
+        script.dataset.loaded = 'true';
+        resolve();
+      };
+      const onError = () => {
+        script.remove();
+        reject(new Error('Failed to load Razorpay'));
+      };
+      script.addEventListener('load', onLoad, { once: true });
+      script.addEventListener('error', onError, { once: true });
+      if (!existing) {
+        script.id = 'razorpay-checkout-js';
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        document.body.appendChild(script);
+      }
     });
 
-  if (!hydrated || !cart) {
+  if (!hydrated || cartLoading) {
     return (
       <div className="flex justify-center py-24">
         <Spinner />
+      </div>
+    );
+  }
+
+  if (cartError && !cart) {
+    return (
+      <div className="container-px py-16 text-center">
+        <p className="text-sm text-muted-foreground">{cartError}</p>
+        <Button className="mt-4" onClick={() => fetchCart().catch(() => undefined)}>Try again</Button>
+      </div>
+    );
+  }
+
+  if (!cart) {
+    return (
+      <div className="container-px py-16 text-center">
+        <p>Your bag could not be loaded.</p>
+        <Button className="mt-4" onClick={() => fetchCart().catch(() => undefined)}>Try again</Button>
       </div>
     );
   }
@@ -233,6 +291,25 @@ export default function CheckoutPage() {
                 {showNew ? 'Cancel' : 'Add new'}
               </button>
             </div>
+            {addressLoading && <p className="mt-3 text-sm text-muted-foreground">Loading saved addresses…</p>}
+            {addressError && (
+              <div className="mt-3 text-sm text-red-400">
+                <p>{addressError}</p>
+                <button className="mt-2 underline" onClick={() => {
+                  setAddressError(null);
+                  setAddressLoading(true);
+                  apiClient.get<Address[]>('/addresses', { auth: true })
+                    .then((list) => {
+                      setAddresses(list);
+                      const def = list.find((a) => a.isDefault) || list[0];
+                      if (def) setAddressId(def.id);
+                      if (!list.length) setShowNew(true);
+                    })
+                    .catch((error) => setAddressError(error instanceof Error ? error.message : 'Unable to load saved addresses'))
+                    .finally(() => setAddressLoading(false));
+                }}>Try again</button>
+              </div>
+            )}
             {showNew && (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 {(['fullName', 'phone', 'line1', 'line2', 'city', 'state', 'postalCode'] as const).map((k) => (
@@ -244,7 +321,7 @@ export default function CheckoutPage() {
                     />
                   </div>
                 ))}
-                <Button onClick={saveAddress} className="sm:col-span-2">
+                <Button onClick={saveAddress} loading={savingAddress} className="sm:col-span-2">
                   Save address
                 </Button>
               </div>
@@ -317,7 +394,7 @@ export default function CheckoutPage() {
               <span className="text-lg font-semibold">{formatInr(cart.summary.total)}</span>
             </div>
           </div>
-          <Button className="mt-6 w-full" size="lg" loading={loading} onClick={placeOrder}>
+          <Button className="mt-6 w-full" size="lg" loading={loading} disabled={loading || !addressId || showNew || addressLoading} onClick={placeOrder}>
             Place order
           </Button>
         </aside>
