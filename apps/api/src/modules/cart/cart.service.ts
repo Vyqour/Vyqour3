@@ -253,7 +253,7 @@ export class CartService {
         total: round2(total),
         currency: 'INR',
         itemCount: items.reduce((s, i) => s + i.quantity, 0),
-        couponCode: cart.couponCode,
+        couponCode: coupon?.code || null,
       },
     };
   }
