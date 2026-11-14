@@ -92,7 +92,7 @@ export class OrdersService {
           shippingAmount: summary.shippingAmount,
           taxAmount: summary.taxAmount,
           total: summary.total,
-          couponCode: summary.couponCode || dto.couponCode,
+          couponCode: summary.couponCode || null,
           shippingAddressId: dto.shippingAddressId,
           billingAddressId: dto.billingAddressId || dto.shippingAddressId,
           notes: dto.notes,
