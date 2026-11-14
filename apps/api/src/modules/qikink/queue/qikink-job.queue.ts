@@ -37,8 +37,13 @@ export class QikinkJobQueue {
     existingTx?: Prisma.TransactionClient,
   ) {
     const runInTx = async (tx: Prisma.TransactionClient) => {
-      if (opts.orderId && type === QikinkJobType.SUBMIT_ORDER) {
-        // Explicit DB row-level lock on the order row to serialize concurrent enqueue calls
+      if (
+        opts.orderId &&
+        (type === QikinkJobType.SUBMIT_ORDER || type === QikinkJobType.SYNC_ORDER_STATUS)
+      ) {
+        // Serialize active per-order submission and status-sync enqueue calls.
+        // This prevents the 30-minute poller and webhook from creating duplicate
+        // status jobs while an earlier sync is pending or processing.
         try {
           await tx.$executeRaw`SELECT id FROM orders WHERE id = ${opts.orderId} FOR UPDATE`;
         } catch {
