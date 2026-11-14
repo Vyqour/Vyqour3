@@ -12,6 +12,17 @@ export default function Page() {
       <h1 className="mt-2 text-3xl font-medium md:text-4xl">Terms &amp; Conditions</h1>
       <div className="prose-invert-custom mt-8 max-w-3xl space-y-4 text-sm leading-relaxed text-muted-foreground">
         <p>Last updated: November 2026</p>
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          <p><strong className="text-white">Business / brand:</strong> VYQOUR</p>
+          <p><strong className="text-white">Legal name of business operator:</strong> [PLACEHOLDER: Insert verified legal name]</p>
+          <p><strong className="text-white">Principal business address:</strong> [PLACEHOLDER: Insert complete business address]</p>
+          <p><strong className="text-white">Website:</strong> vyqour.com</p>
+          <p><strong className="text-white">Customer care email:</strong> vyqourofficial@gmail.com</p>
+        </div>
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-amber-200">
+          Setup reminder: Replace the legal name and address placeholders with verified business
+          information before publishing this policy.
+        </p>
         <p>
           These Terms &amp; Conditions ("Terms") govern your access to and use of the VYQOUR website
           and purchases made through it. "VYQOUR", "we", "us" and "our" refer to the business
