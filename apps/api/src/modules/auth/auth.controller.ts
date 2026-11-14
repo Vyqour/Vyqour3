@@ -35,7 +35,7 @@ import { Throttle } from '@nestjs/throttler';
  * Codespaces always serves HTTPS, so Secure is safe there even when NODE_ENV=development.
  */
 @Injectable()
-class GoogleConfiguredGuard implements CanActivate {
+export class GoogleConfiguredGuard implements CanActivate {
   constructor(private readonly config: ConfigService) {}
 
   canActivate() {
@@ -232,7 +232,7 @@ export class AuthController {
 
   @Public()
   @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleConfiguredGuard, AuthGuard('google'))
   async googleCallback(@Req() req: Request, @Res() res: Response) {
     const profile = req.user as {
       googleId: string;
