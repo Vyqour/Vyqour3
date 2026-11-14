@@ -39,11 +39,23 @@ export class GoogleConfiguredGuard implements CanActivate {
   constructor(private readonly config: ConfigService) {}
 
   canActivate() {
-    const configured =
-      Boolean(this.config.get<string>('google.clientId')) &&
-      Boolean(this.config.get<string>('google.clientSecret')) &&
-      Boolean(this.config.get<string>('google.callbackUrl')) &&
-      Boolean(this.config.get<string>('webUrl'));
+    const clientId = this.config.get<string>('google.clientId');
+    const clientSecret = this.config.get<string>('google.clientSecret');
+    const callbackUrl = this.config.get<string>('google.callbackUrl');
+    const webUrl = this.config.get<string>('webUrl');
+    let validUrls = false;
+    try {
+      const callback = new URL(callbackUrl || '');
+      const web = new URL(webUrl || '');
+      validUrls =
+        ['http:', 'https:'].includes(callback.protocol) &&
+        ['http:', 'https:'].includes(web.protocol) &&
+        (this.config.get<string>('nodeEnv') !== 'production' ||
+          (callback.protocol === 'https:' && web.protocol === 'https:'));
+    } catch {
+      validUrls = false;
+    }
+    const configured = Boolean(clientId && clientSecret && validUrls);
     if (!configured) {
       throw new ServiceUnavailableException(
         'Google sign-in is not configured. Please use email and password or contact support.',
