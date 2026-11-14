@@ -94,7 +94,7 @@ export default function Page() {
           <li>Use the website for unlawful, fraudulent or misleading activity.</li>
           <li>Attempt to access accounts, systems or data without authorisation.</li>
           <li>Interfere with the security, availability or operation of the website.</li>
-          <li>Upload malicious code or submit another person's personal information without authority.</li>
+          <li>Upload malicious code or submit another person&apos;s personal information without authority.</li>
           <li>Copy, reproduce or commercially use VYQOUR&apos;s protected designs, branding or content without permission.</li>
         </ul>
 
