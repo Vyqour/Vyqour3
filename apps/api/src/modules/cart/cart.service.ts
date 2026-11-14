@@ -153,6 +153,14 @@ export class CartService {
     if (coupon.usageLimit != null && coupon.usageCount >= coupon.usageLimit) {
       throw new BadRequestException('Coupon usage limit reached');
     }
+    if (userId && coupon.perUserLimit > 0) {
+      const priorUses = await this.prisma.order.count({
+        where: { userId, couponCode: coupon.code },
+      });
+      if (priorUses >= coupon.perUserLimit) {
+        throw new BadRequestException('You have already used this coupon the maximum number of times');
+      }
+    }
     const cart = await this.getOrCreateCart(userId, sessionId);
     const current = await this.withTotals(cart);
     if (coupon.minOrderAmount && current.summary.subtotal < Number(coupon.minOrderAmount)) {
@@ -216,12 +224,20 @@ export class CartService {
     if (cart.couponCode) {
       const candidate = await this.prisma.coupon.findUnique({ where: { code: cart.couponCode } });
       const now = new Date();
+      let withinPerUserLimit = true;
+      if (candidate && cart.userId && candidate.perUserLimit > 0) {
+        const priorUses = await this.prisma.order.count({
+          where: { userId: cart.userId, couponCode: candidate.code },
+        });
+        withinPerUserLimit = priorUses < candidate.perUserLimit;
+      }
       const eligible = Boolean(
         candidate &&
           candidate.isActive &&
           candidate.startsAt <= now &&
           candidate.expiresAt >= now &&
           (candidate.usageLimit == null || candidate.usageCount < candidate.usageLimit) &&
+          withinPerUserLimit &&
           (!candidate.minOrderAmount || subtotal >= Number(candidate.minOrderAmount)),
       );
       if (eligible && candidate) {
