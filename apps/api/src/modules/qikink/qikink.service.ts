@@ -436,7 +436,9 @@ export class QikinkService {
       internalOrderId: order.id,
     });
     if (!status || typeof status !== 'object') {
-      return { skipped: true, reason: 'status_endpoint_unavailable' };
+      // A missing provider response is not a successful sync. Throw so the
+      // worker retries with backoff and eventually dead-letters the job.
+      throw new Error('Qikink order status unavailable or not found; retry scheduled');
     }
     return this.applyFulfillmentUpdate(order.id, {
       status: status.status || status.order_status,
