@@ -9,6 +9,7 @@ import {
   Req,
   Res,
   ServiceUnavailableException,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
@@ -166,7 +167,7 @@ export class AuthController {
   ) {
     const token = dto.refreshToken || (req.cookies?.refresh_token as string | undefined);
     if (!token) {
-      return { success: false, message: 'No refresh token' };
+      throw new UnauthorizedException('Refresh token is missing or expired');
     }
     const result = await this.auth.refresh(token);
     setAuthCookies(req, res, result.accessToken, result.refreshToken);
