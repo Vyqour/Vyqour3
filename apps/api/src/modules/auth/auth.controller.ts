@@ -253,6 +253,7 @@ export class AuthController {
       firstName: string;
       lastName?: string;
       avatarUrl?: string;
+      emailVerified?: boolean;
     };
     const result = await this.auth.validateGoogleUser(profile);
     setAuthCookies(req, res, result.accessToken, result.refreshToken);
