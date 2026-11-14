@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 
-export const metadata: Metadata = { title: 'Privacy Policy' };
+export const metadata: Metadata = {
+  title: 'Privacy Policy',
+  description: 'How VYQOUR collects, uses, stores and protects personal information.',
+};
 
 export default function Page() {
   return (
@@ -8,106 +11,128 @@ export default function Page() {
       <p className="text-xs font-semibold uppercase tracking-[0.25em] text-primary-glow">Legal</p>
       <h1 className="mt-2 text-3xl font-medium md:text-4xl">Privacy Policy</h1>
       <div className="prose-invert-custom mt-8 max-w-3xl space-y-4 text-sm leading-relaxed text-muted-foreground">
-
-        <p>Last updated: July 2026</p>
+        <p>Last updated: November 2026</p>
         <p>
-          VYQOUR (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;) respects your privacy. This policy explains what
-          personal data we collect, why we collect it, how we use and protect it, and what rights you
-          have, when you use vyqour.com and place orders with us in India.
+          This Privacy Policy explains how VYQOUR ("VYQOUR", "we", "us" or "our") collects, uses,
+          shares and protects personal information when you visit our website, create an account,
+          contact us or place an order in India. We handle personal information for specific
+          business purposes and in accordance with applicable law.
         </p>
 
         <h2 className="text-white text-lg font-medium">1. Information we collect</h2>
-        <p>We collect the following categories of information:</p>
         <ul className="list-disc space-y-2 pl-5">
-          <li><strong className="text-white">Account information:</strong> name, email address, phone number, and password (stored in encrypted form).</li>
-          <li><strong className="text-white">Order information:</strong> shipping and billing addresses, items purchased, order value, and order history.</li>
-          <li><strong className="text-white">Payment information:</strong> we do not collect or store your card, UPI, or bank details. Payments are processed directly by our payment partner, Razorpay, under their own security and privacy standards.</li>
-          <li><strong className="text-white">Technical information:</strong> IP address, browser type, device information, and pages visited, collected automatically to keep the site secure and working correctly.</li>
-          <li><strong className="text-white">Communications:</strong> messages you send us via the Contact page, email, or customer support.</li>
+          <li><strong className="text-white">Account details:</strong> name, email address, phone number and account credentials.</li>
+          <li><strong className="text-white">Order details:</strong> products and variants ordered, order history, delivery address, billing details where applicable, and order value.</li>
+          <li><strong className="text-white">Payment details:</strong> payment status, transaction reference and related payment information. Card, UPI and banking credentials are handled by the payment service provider; VYQOUR does not ask you to send these credentials to us.</li>
+          <li><strong className="text-white">Support communications:</strong> information and attachments you provide when contacting customer support or raising a grievance.</li>
+          <li><strong className="text-white">Technical and usage information:</strong> information such as IP address, browser/device details, security logs and website interactions where collected by our website or service providers.</li>
         </ul>
 
-        <h2 className="text-white text-lg font-medium">2. How we use your information</h2>
+        <h2 className="text-white text-lg font-medium">2. Why we use your information</h2>
         <ul className="list-disc space-y-2 pl-5">
-          <li>To process and fulfil your orders, including sharing your name, address, and phone number with our shipping/fulfilment partner so your order can be delivered.</li>
-          <li>To communicate with you about your order status, shipping updates, and customer support requests.</li>
-          <li>To detect and prevent fraud, abuse, and unauthorized transactions.</li>
-          <li>To improve our website, products, and customer experience.</li>
-          <li>To send marketing updates about new drops or offers, only if you have opted in — you can unsubscribe at any time.</li>
+          <li>Create and manage your account and provide requested website features.</li>
+          <li>Accept, process, manufacture/fulfil, ship and deliver your orders, including sharing necessary delivery information with our fulfilment and courier partners.</li>
+          <li>Process payments, refunds, cancellations and payment-related enquiries through our payment service provider.</li>
+          <li>Send order confirmations, delivery updates, service messages and responses to support requests.</li>
+          <li>Protect the website, prevent fraud, investigate misuse and maintain business, tax and accounting records.</li>
+          <li>Improve our products and services. We send promotional communications only where permitted and provide a way to opt out.</li>
         </ul>
 
-        <h2 className="text-white text-lg font-medium">3. Who we share data with</h2>
-        <p>We share your information only where necessary to run our business, specifically with:</p>
+        <h2 className="text-white text-lg font-medium">3. When we share information</h2>
+        <p>We share only the information reasonably needed for the relevant purpose, including with:</p>
         <ul className="list-disc space-y-2 pl-5">
-          <li><strong className="text-white">Razorpay</strong> — to process your payment securely.</li>
-          <li><strong className="text-white">Our manufacturing and shipping/fulfilment partner</strong> — to produce and deliver your made-to-order item.</li>
-          <li><strong className="text-white">Hosting and infrastructure providers</strong> — to run our website and store order data securely.</li>
+          <li><strong className="text-white">Payment providers, including Razorpay:</strong> to process payments and eligible refunds.</li>
+          <li><strong className="text-white">Fulfilment and delivery partners, including Qikink and its courier partners where applicable:</strong> to prepare, dispatch and deliver orders and provide tracking.</li>
+          <li><strong className="text-white">Website hosting, database, email and security providers:</strong> to operate, maintain and protect the website and communicate with you.</li>
+          <li><strong className="text-white">Authorities and professional advisers:</strong> where disclosure is required by law or reasonably necessary to establish, exercise or defend legal claims.</li>
         </ul>
-        <p>We do not sell, rent, or trade your personal data to third parties for their own marketing purposes.</p>
+        <p>We do not sell your personal information to third parties for their independent marketing.</p>
 
-        <h2 className="text-white text-lg font-medium">4. Data security and breach notification</h2>
+        <h2 className="text-white text-lg font-medium">4. Payments</h2>
         <p>
-          We use industry-standard measures — including encrypted password storage and secure
-          connections (HTTPS) — to protect your data. However, no method of transmission or storage is
-          100% secure, and we cannot guarantee absolute security. If we become aware of a security
-          breach affecting your personal data, we will notify affected users and take reasonable steps
-          to contain and address the issue as required by applicable law.
+          Online payments are processed by the payment provider shown at checkout. Your payment
+          provider may collect and process payment credentials under its own terms and privacy
+          policy. VYQOUR receives transaction and payment-status information needed to confirm
+          orders, provide support and process refunds.
         </p>
 
-        <h2 className="text-white text-lg font-medium">5. Data retention</h2>
+        <h2 className="text-white text-lg font-medium">5. Cookies and similar technologies</h2>
         <p>
-          We retain your account and order information for as long as your account is active and as
-          needed to comply with our legal and accounting obligations, resolve disputes, and enforce
-          our agreements.
+          The website may use essential cookies or similar technologies for functions such as
+          account sessions, security and cart operation. If optional analytics or advertising
+          technologies are enabled, we will provide appropriate information and choices as required
+          by applicable law. You can also manage cookies through your browser, although disabling
+          essential cookies may affect website functionality.
         </p>
 
-        <h2 className="text-white text-lg font-medium">6. Your rights</h2>
+        <h2 className="text-white text-lg font-medium">6. Data security</h2>
         <p>
-          You may request access to, correction of, or deletion of your personal data, or withdraw
-          consent for marketing communications, at any time by contacting{' '}
+          We use reasonable technical and organisational safeguards intended to protect personal
+          information against unauthorised access, loss, misuse or alteration. No internet
+          transmission or storage system can be guaranteed to be completely secure. If a personal
+          data breach occurs, we will take appropriate steps and provide notices as required by
+          applicable law.
+        </p>
+
+        <h2 className="text-white text-lg font-medium">7. How long we keep information</h2>
+        <p>
+          We retain information for as long as reasonably necessary for the purposes described in
+          this policy, including account operation, order fulfilment, customer support, legal,
+          tax and accounting requirements, fraud prevention and dispute resolution. When information
+          is no longer required, we will take appropriate steps to delete or de-identify it, subject
+          to applicable legal requirements.
+        </p>
+
+        <h2 className="text-white text-lg font-medium">8. Your privacy requests</h2>
+        <p>
+          Subject to applicable law and verification of your identity, you may contact us to request
+          information about personal data associated with you, correction or updating of inaccurate
+          information, or deletion where deletion is permitted. You may also withdraw consent where
+          processing is based on consent. Withdrawal does not affect processing already carried out
+          lawfully, and some information may need to be retained to meet legal obligations or resolve
+          claims.
+        </p>
+        <p>
+          Send privacy requests to{' '}
           <a href="mailto:vyqourofficial@gmail.com" className="text-primary-glow underline">
             vyqourofficial@gmail.com
           </a>
-          . We will respond to verified requests within a reasonable timeframe.
+          . Please describe your request and provide enough information for us to verify it. Do not
+          email passwords, full card numbers or UPI PINs.
         </p>
 
-        <h2 className="text-white text-lg font-medium">7. Cookies</h2>
+        <h2 className="text-white text-lg font-medium">9. Children</h2>
         <p>
-          We use essential cookies to keep you logged in and remember your cart. We may use analytics
-          cookies to understand how visitors use our site, which helps us improve products and
-          services. You can control or disable cookies through your browser settings, though some site
-          features may not work correctly without them.
+          Our website is not intended for independent use by children under 18. A person under 18
+          should use the website and place orders only with the involvement and permission of a
+          parent or lawful guardian. We do not knowingly seek to collect children's personal data
+          without the consent required by applicable law.
         </p>
 
-        <h2 className="text-white text-lg font-medium">8. Account security and passwords</h2>
+        <h2 className="text-white text-lg font-medium">10. Third-party websites</h2>
         <p>
-          You are responsible for maintaining the confidentiality of your account login and password,
-          and for restricting access to your device. Notify us immediately at{' '}
-          vyqourofficial@gmail.com if you suspect any unauthorized access to your account.
+          Our website may link to third-party websites or services. Their privacy practices are
+          governed by their own policies, and we encourage you to review those policies before
+          providing information to them.
         </p>
 
-        <h2 className="text-white text-lg font-medium">9. Children&apos;s privacy</h2>
+        <h2 className="text-white text-lg font-medium">11. Changes to this policy</h2>
         <p>
-          VYQOUR is not intended for children under 18 without parental or guardian supervision. We do
-          not knowingly collect personal data from unsupervised children.
+          We may update this policy when our practices or applicable law change. The revised policy
+          will be published on this page with an updated date.
         </p>
 
-        <h2 className="text-white text-lg font-medium">10. Changes to this policy</h2>
+        <h2 className="text-white text-lg font-medium">12. Contact</h2>
         <p>
-          We may update this Privacy Policy from time to time. Changes will be posted on this page
-          with a revised &quot;Last updated&quot; date. Continued use of the website after changes are posted
-          constitutes acceptance of the revised policy.
-        </p>
-
-        <h2 className="text-white text-lg font-medium">11. Contact us</h2>
-        <p>
-          For any privacy-related questions or requests, contact us at{' '}
+          For privacy questions or requests, contact VYQOUR at{' '}
           <a href="mailto:vyqourofficial@gmail.com" className="text-primary-glow underline">
             vyqourofficial@gmail.com
           </a>
-          .
+          . For a consumer complaint, you may also use our{' '}
+          <a href="/grievance-redressal" className="text-primary-glow underline">Grievance Redressal</a>{' '}
+          page.
         </p>
-
       </div>
     </div>
   );
-          }
+}
