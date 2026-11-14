@@ -15,6 +15,7 @@ const help = [
   { href: '/faq', label: 'FAQ' },
   { href: '/shipping-policy', label: 'Shipping' },
   { href: '/refund', label: 'Returns & Refunds' },
+  { href: '/grievance-redressal', label: 'Grievance Redressal' },
   { href: '/contact', label: 'Contact' },
 ];
 
