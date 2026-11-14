@@ -121,26 +121,59 @@ export class QikinkApiClient {
   }
 
   /**
-   * Optional status endpoint. Not fully documented in public Postman collection
-   * for all accounts — failures are treated as soft (caller decides).
+   * Qikink API 08-25 documents GET /api/order/list (and legacy GET /api/order).
+   * Normalize its paginated data[] response to the shape used by the service.
    */
   async getOrderStatus(params: {
     orderId?: string | number;
     orderNumber?: string;
     internalOrderId?: string;
   }): Promise<QikinkOrderStatusResponse | null> {
-    const endpoint = this.config.get<string>('qikink.statusEndpoint') || '/api/order/status';
+    const endpoint = '/api/order/list';
     const qs = new URLSearchParams();
-    if (params.orderId) qs.set('order_id', String(params.orderId));
-    if (params.orderNumber) qs.set('order_number', String(params.orderNumber));
-    const path = `${endpoint}?${qs.toString()}`;
+    if (params.orderId) qs.set('id', String(params.orderId));
+    else if (params.orderNumber) qs.set('order_reference_no', String(params.orderNumber));
+    else return null;
+    qs.set('params', 'order_id,number,status,shipping');
     try {
-      return await this.request<QikinkOrderStatusResponse>(
+      const result = await this.request<unknown>(
         'GET',
-        path,
+        `${endpoint}?${qs.toString()}`,
         undefined,
         params.internalOrderId,
       );
+      if (!result || typeof result !== 'object') return null;
+      const envelope = result as {
+        success?: boolean;
+        data?: unknown;
+      };
+      if (envelope.success === false || !Array.isArray(envelope.data)) return null;
+      const rows = envelope.data as Array<Record<string, unknown>>;
+      // Never fall back to an unrelated first row. A wrong match could attach
+      // another customer's fulfilment status or tracking number to this order.
+      const row = rows.find((item) =>
+        params.orderId
+          ? String(item.order_id) === String(params.orderId)
+          : String(item.number || '').endsWith(String(params.orderNumber || '')),
+      );
+      if (!row) return null;
+      const shipping =
+        row.shipping && typeof row.shipping === 'object'
+          ? (row.shipping as Record<string, unknown>)
+          : {};
+      return {
+        order_id: row.order_id as string | number | undefined,
+        order_number: row.number as string | undefined,
+        status: row.status as string | undefined,
+        awb: shipping.awb as string | undefined,
+        tracking_number: shipping.awb as string | undefined,
+        tracking_link: shipping.tracking_link as string | undefined,
+        courier_provider_name: shipping.courier_provider_name as string | undefined,
+        courier: shipping.courier_provider_name as string | undefined,
+        shipping_type: row.shipping_type as string | undefined,
+        payment_type: row.payment_type as string | undefined,
+        raw: row,
+      };
     } catch (err) {
       this.logger.warn(`Qikink status poll unavailable: ${(err as Error).message}`);
       return null;
@@ -195,7 +228,14 @@ export class QikinkApiClient {
       }
 
       if (!res.ok) {
-        throw new Error(`Qikink ${method} ${path} failed (${res.status}): ${text}`);
+        throw new Error(`Qikink ${method} ${path} failed (${res.status})`);
+      }
+
+      // Some provider APIs return HTTP 200 with an application-level error.
+      // Treat explicit errors as failures, not as uncertain successful submissions.
+      if (this.hasProviderError(responseBody)) {
+        const message = this.providerErrorMessage(responseBody);
+        throw new Error(`Qikink ${method} ${path}: ${message}`);
       }
 
       await this.log({
@@ -227,6 +267,45 @@ export class QikinkApiClient {
     }
   }
 
+  private hasProviderError(body: unknown): boolean {
+    if (!body || typeof body !== 'object') return false;
+    const value = body as Record<string, unknown>;
+    if (value.error) return true;
+    if (value.success === false) return true;
+    if (value.status_code != null && !['200', '1', 'success'].includes(String(value.status_code).toLowerCase())) {
+      return true;
+    }
+    if (value.code != null && !['1', '200', 'success'].includes(String(value.code).toLowerCase())) {
+      return true;
+    }
+    return false;
+  }
+
+  private providerErrorMessage(body: unknown): string {
+    if (!body || typeof body !== 'object') return 'Provider returned an error response';
+    const value = body as Record<string, unknown>;
+    const candidate = value.message || value.msg || value.error || value.status;
+    if (typeof candidate === 'string') {
+      return candidate
+        .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[REDACTED_EMAIL]')
+        .replace(/\b\d{10,15}\b/g, '[REDACTED_PHONE]')
+        .slice(0, 300);
+    }
+    return 'Provider returned an error response';
+  }
+
+  private redactSensitiveData(value: unknown): unknown {
+    const sensitiveKey = /(address|phone|mobile|email|first_?name|last_?name|full_?name|customer|recipient)/i;
+    if (Array.isArray(value)) return value.map((item) => this.redactSensitiveData(item));
+    if (!value || typeof value !== 'object') return value;
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        sensitiveKey.test(key) ? '[REDACTED]' : this.redactSensitiveData(item),
+      ]),
+    );
+  }
+
   private async log(data: {
     direction: string;
     method?: string;
@@ -248,8 +327,14 @@ export class QikinkApiClient {
           orderId: data.orderId,
           statusCode: data.statusCode,
           success: data.success,
-          requestBody: (data.requestBody as object) ?? undefined,
-          responseBody: (data.responseBody as object) ?? undefined,
+          requestBody:
+            data.requestBody == null
+              ? undefined
+              : (this.redactSensitiveData(data.requestBody) as object),
+          responseBody:
+            data.responseBody == null
+              ? undefined
+              : (this.redactSensitiveData(data.responseBody) as object),
           error: data.error,
           durationMs: data.durationMs,
         },
