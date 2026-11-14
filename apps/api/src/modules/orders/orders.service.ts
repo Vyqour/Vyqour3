@@ -156,13 +156,22 @@ export class OrdersService {
         // A null usageLimit means unlimited usage. Any failure later in this
         // transaction rolls the claim back automatically.
         const coupon = await tx.coupon.findUnique({ where: { code: summary.couponCode } });
-        if (!coupon || !coupon.isActive) {
-          throw new BadRequestException('Invalid coupon');
+        const now = new Date();
+        if (
+          !coupon ||
+          !coupon.isActive ||
+          coupon.startsAt > now ||
+          coupon.expiresAt < now ||
+          (coupon.minOrderAmount != null && summary.subtotal < Number(coupon.minOrderAmount))
+        ) {
+          throw new BadRequestException('Coupon is no longer valid for this order');
         }
         const claimed = await tx.coupon.updateMany({
           where: {
             code: summary.couponCode,
             isActive: true,
+            startsAt: { lte: now },
+            expiresAt: { gte: now },
             ...(coupon.usageLimit != null ? { usageCount: { lt: coupon.usageLimit } } : {}),
           },
           data: { usageCount: { increment: 1 } },
