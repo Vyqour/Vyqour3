@@ -26,8 +26,8 @@ export class PaymentsController {
 
   @Post('verify')
   @ApiBearerAuth()
-  verify(@Body() dto: VerifyPaymentDto) {
-    return this.payments.verifyPayment(dto);
+  verify(@Body() dto: VerifyPaymentDto, @CurrentUser() user: AuthUser) {
+    return this.payments.verifyPayment(dto, user.id);
   }
 
   @Public()
