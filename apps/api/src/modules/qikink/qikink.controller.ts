@@ -70,6 +70,13 @@ export class QikinkController {
     return this.qikink.getOrderFulfillment(orderId);
   }
 
+  @Get('orders/:orderId/live-status')
+  @ApiBearerAuth()
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  liveStatus(@Param('orderId') orderId: string) {
+    return this.qikink.getLiveOrderStatus(orderId);
+  }
+
   @Post('orders/:orderId/sync-status')
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.SUPER_ADMIN, Role.SUPPORT)

@@ -405,6 +405,51 @@ describe('QikinkService - Order Submission Hardening', () => {
       mockPrisma.order.findFirst = jest.fn();
     });
 
+
+
+    it('live diagnostic reads provider status without mutating orders, jobs, histories, audits, or API logs', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        id: 'order_1',
+        orderNumber: 'VYQ10001',
+        qikinkOrderId: 'QIK_LIVE_123',
+        qikinkOrderNumber: 'VYQ10001',
+      });
+      mockClient.getOrderStatus.mockResolvedValue({
+        order_id: 'QIK_LIVE_123',
+        status: 'In-Transit',
+        awb: 'AWB123',
+        courier: 'Bluedart',
+        tracking_link: 'https://tracking.example/AWB123',
+        raw: { customer_name: 'Must not be returned' },
+      });
+
+      const result = await service.getLiveOrderStatus('order_1');
+
+      expect(result).toEqual({
+        success: true,
+        source: 'qikink_live_api',
+        orderNumber: 'VYQ10001',
+        qikinkOrderId: 'QIK_LIVE_123',
+        status: 'In-Transit',
+        awb: 'AWB123',
+        courier: 'Bluedart',
+        trackingLink: 'https://tracking.example/AWB123',
+      });
+      expect(mockClient.getOrderStatus).toHaveBeenCalledWith({
+        orderId: 'QIK_LIVE_123',
+        orderNumber: 'VYQ10001',
+        internalOrderId: 'order_1',
+        logToDatabase: false,
+      });
+      expect(mockPrisma.order.update).not.toHaveBeenCalled();
+      expect(mockPrisma.order.updateMany).not.toHaveBeenCalled();
+      expect(mockPrisma.orderStatusHistory.create).not.toHaveBeenCalled();
+      expect(mockPrisma.auditLog.create).not.toHaveBeenCalled();
+      expect(mockPrisma.qikinkApiLog.create).not.toHaveBeenCalled();
+      expect(mockQueue.enqueue).not.toHaveBeenCalled();
+      expect(mockClient.createOrder).not.toHaveBeenCalled();
+    });
+
     it('P8-1. Valid status response and supported status mapping -> updates order status and tracking info', async () => {
       mockPrisma.order.findUnique.mockResolvedValue({
         ...baseOrder,
