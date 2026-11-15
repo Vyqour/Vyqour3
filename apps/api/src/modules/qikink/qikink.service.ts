@@ -425,6 +425,60 @@ export class QikinkService {
     };
   }
 
+  /**
+   * Performs a provider-only status lookup for an existing order.
+   * This diagnostic path deliberately avoids queueing work and writing to Neon.
+   */
+  async getLiveOrderStatus(orderId: string) {
+    if (!this.isEnabled()) {
+      return { success: false, reason: 'qikink_disabled' };
+    }
+
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        orderNumber: true,
+        qikinkOrderId: true,
+        qikinkOrderNumber: true,
+      },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+    if (!order.qikinkOrderId) {
+      return {
+        success: false,
+        reason: 'missing_qikink_order_id',
+        orderNumber: order.orderNumber,
+      };
+    }
+
+    const status = await this.client.getOrderStatus({
+      orderId: order.qikinkOrderId,
+      orderNumber: order.qikinkOrderNumber || undefined,
+      internalOrderId: order.id,
+      logToDatabase: false,
+    });
+    if (!status) {
+      return {
+        success: false,
+        reason: 'provider_order_not_found_or_unavailable',
+        orderNumber: order.orderNumber,
+        qikinkOrderId: order.qikinkOrderId,
+      };
+    }
+
+    return {
+      success: true,
+      source: 'qikink_live_api',
+      orderNumber: order.orderNumber,
+      qikinkOrderId: order.qikinkOrderId,
+      status: status.status || status.order_status || null,
+      awb: status.awb || status.tracking_number || null,
+      courier: status.courier || status.courier_provider_name || null,
+      trackingLink: status.tracking_link || null,
+    };
+  }
+
   async processStatusSync(orderId: string) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order?.qikinkOrderId) {
