@@ -46,7 +46,7 @@ export class QikinkApiClient {
     return this.config.get<string>('qikink.clientSecret') || '';
   }
 
-  async getAccessToken(force = false): Promise<string> {
+  async getAccessToken(force = false, logToDatabase = true): Promise<string> {
     if (!force && this.token && Date.now() < this.tokenExpiresAt - 30_000) {
       return this.token;
     }
@@ -86,7 +86,7 @@ export class QikinkApiClient {
       this.token = token;
       const expiresIn = Number(data.expires_in || 3600);
       this.tokenExpiresAt = Date.now() + expiresIn * 1000;
-      await this.log({
+      if (logToDatabase) await this.log({
         direction: 'outbound',
         method: 'POST',
         path: '/api/token',
@@ -98,7 +98,7 @@ export class QikinkApiClient {
       });
       return token;
     } catch (err) {
-      await this.log({
+      if (logToDatabase) await this.log({
         direction: 'outbound',
         method: 'POST',
         path: '/api/token',
@@ -128,6 +128,7 @@ export class QikinkApiClient {
     orderId?: string | number;
     orderNumber?: string;
     internalOrderId?: string;
+    logToDatabase?: boolean;
   }): Promise<QikinkOrderStatusResponse | null> {
     const endpoint = '/api/order/list';
     const qs = new URLSearchParams();
@@ -141,6 +142,8 @@ export class QikinkApiClient {
         `${endpoint}?${qs.toString()}`,
         undefined,
         params.internalOrderId,
+        false,
+        params.logToDatabase !== false,
       );
       if (!result || typeof result !== 'object') return null;
       const envelope = result as {
@@ -195,8 +198,9 @@ export class QikinkApiClient {
     body?: unknown,
     orderId?: string,
     retried = false,
+    logToDatabase = true,
   ): Promise<T> {
-    const token = await this.getAccessToken();
+    const token = await this.getAccessToken(false, logToDatabase);
     const url = `${this.getBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`;
     const started = Date.now();
     let statusCode = 0;
@@ -223,8 +227,8 @@ export class QikinkApiClient {
 
       if (res.status === 401 && !retried) {
         this.token = null;
-        await this.getAccessToken(true);
-        return this.request<T>(method, path, body, orderId, true);
+        await this.getAccessToken(true, logToDatabase);
+        return this.request<T>(method, path, body, orderId, true, logToDatabase);
       }
 
       if (!res.ok) {
@@ -238,7 +242,7 @@ export class QikinkApiClient {
         throw new Error(`Qikink ${method} ${path}: ${message}`);
       }
 
-      await this.log({
+      if (logToDatabase) await this.log({
         direction: 'outbound',
         method,
         path,
@@ -251,7 +255,7 @@ export class QikinkApiClient {
       });
       return responseBody as T;
     } catch (err) {
-      await this.log({
+      if (logToDatabase) await this.log({
         direction: 'outbound',
         method,
         path,
