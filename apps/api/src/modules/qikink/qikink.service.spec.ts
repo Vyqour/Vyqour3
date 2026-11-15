@@ -682,6 +682,20 @@ describe('QikinkService - Order Submission Hardening', () => {
       expect(mockClient.createOrder).not.toHaveBeenCalled();
     });
 
+    it('retries when Qikink status lookup returns no matching order', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        id: 'order_1',
+        qikinkOrderId: 'QIK_MISSING_1',
+      });
+      mockClient.getOrderStatus.mockResolvedValue(null);
+
+      await expect(service.processStatusSync('order_1')).rejects.toThrow(
+        'Qikink order status unavailable or not found; retry scheduled',
+      );
+      expect(mockPrisma.order.update).not.toHaveBeenCalled();
+    });
+
     it('P8-12. On Hold status handling -> saves qikinkStatus as On Hold without converting internal OrderStatus to PROCESSING', async () => {
       mockPrisma.order.findUnique.mockResolvedValue({
         ...baseOrder,

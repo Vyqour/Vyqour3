@@ -124,6 +124,32 @@ describe('QikinkWorker - retry, dead-letter, completed-submission protection', (
     );
   });
 
+  it('retries unavailable Qikink status sync instead of marking the job completed', async () => {
+    const statusJob = {
+      id: 'status_job_1',
+      type: QikinkJobType.SYNC_ORDER_STATUS,
+      orderId: 'order_1',
+      status: QikinkJobStatus.PROCESSING,
+      attempts: 2,
+      maxAttempts: 8,
+    };
+    mockQueue.claimNext.mockResolvedValueOnce(statusJob).mockResolvedValue(null);
+    mockQikink.processStatusSync.mockRejectedValue(
+      new Error('Qikink order status unavailable or not found; retry scheduled'),
+    );
+
+    await runTick();
+
+    expect(mockQueue.complete).not.toHaveBeenCalled();
+    expect(mockQueue.fail).toHaveBeenCalledWith(
+      'status_job_1',
+      'Qikink order status unavailable or not found; retry scheduled',
+      2,
+      8,
+      false,
+    );
+  });
+
   it('processes at most 5 jobs per tick and stops when the queue is empty', async () => {
     mockQueue.claimNext.mockResolvedValue(null);
 

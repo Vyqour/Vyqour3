@@ -204,6 +204,22 @@ describe('QikinkJobQueue - lock timeout, stale reclamation, ownership guards', (
   });
 
   describe('enqueue (existing dedup preserved)', () => {
+    it('does not create a second active SYNC_ORDER_STATUS job for the same order', async () => {
+      const existing = { id: 'status_job_active', type: QikinkJobType.SYNC_ORDER_STATUS };
+      mockTx.qikinkJob.findFirst.mockResolvedValue(existing);
+
+      const job = await queue.enqueue(QikinkJobType.SYNC_ORDER_STATUS, { orderId: 'order_1' });
+
+      expect(job.id).toBe('status_job_active');
+      expect(mockTx.qikinkJob.findFirst).toHaveBeenCalledWith({
+        where: {
+          orderId: 'order_1',
+          type: QikinkJobType.SYNC_ORDER_STATUS,
+          status: { in: [QikinkJobStatus.PENDING, QikinkJobStatus.PROCESSING] },
+        },
+      });
+    });
+
     it('does not create a second active SUBMIT_ORDER job for the same order', async () => {
       const existing = { id: 'job_active', type: QikinkJobType.SUBMIT_ORDER };
       mockTx.qikinkJob.findFirst.mockResolvedValue(existing);
