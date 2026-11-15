@@ -178,4 +178,32 @@ describe('QikinkApiClient', () => {
       .find((row: any) => row.path === '/api/order/create');
     expect(orderLog.requestBody.shipping_address).toBe('[REDACTED]');
   });
+
+  it('can perform a live status lookup without writing token or API logs to Neon', async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ Accesstoken: 'token', expires_in: 3600 }),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          success: true,
+          data: [{
+            order_id: 123,
+            number: '1_VYQ123456',
+            status: 'In-Transit',
+            shipping: { awb: '77908747221', courier_provider_name: 'Bluedart' },
+          }],
+        }),
+      } as unknown as Response);
+
+    const result = await client.getOrderStatus({ orderId: 123, logToDatabase: false });
+
+    expect(result).toEqual(expect.objectContaining({ order_id: 123, status: 'In-Transit' }));
+    expect(mockPrisma.qikinkApiLog.create).not.toHaveBeenCalled();
+  });
+
 });
