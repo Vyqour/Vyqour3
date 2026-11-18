@@ -24,10 +24,9 @@ export class QikinkApiClient {
   }
 
   getBaseUrl() {
-    return (this.config.get<string>('qikink.baseUrl') || 'https://sandbox.qikink.com').replace(
-      /\/$/,
-      '',
-    );
+    return (
+      this.config.get<string>('qikink.baseUrl') || 'https://sandbox.qikink.com'
+    ).replace(/\/$/, '');
   }
 
   private clientId() {
@@ -86,29 +85,31 @@ export class QikinkApiClient {
       this.token = token;
       const expiresIn = Number(data.expires_in || 3600);
       this.tokenExpiresAt = Date.now() + expiresIn * 1000;
-      if (logToDatabase) await this.log({
-        direction: 'outbound',
-        method: 'POST',
-        path: '/api/token',
-        statusCode,
-        success: true,
-        requestBody: { ClientId: clientId },
-        responseBody: { expires_in: expiresIn },
-        durationMs: Date.now() - started,
-      });
+      if (logToDatabase)
+        await this.log({
+          direction: 'outbound',
+          method: 'POST',
+          path: '/api/token',
+          statusCode,
+          success: true,
+          requestBody: { ClientId: clientId },
+          responseBody: { expires_in: expiresIn },
+          durationMs: Date.now() - started,
+        });
       return token;
     } catch (err) {
-      if (logToDatabase) await this.log({
-        direction: 'outbound',
-        method: 'POST',
-        path: '/api/token',
-        statusCode,
-        success: false,
-        requestBody: { ClientId: clientId },
-        responseBody,
-        error: (err as Error).message,
-        durationMs: Date.now() - started,
-      });
+      if (logToDatabase)
+        await this.log({
+          direction: 'outbound',
+          method: 'POST',
+          path: '/api/token',
+          statusCode,
+          success: false,
+          requestBody: { ClientId: clientId },
+          responseBody,
+          error: (err as Error).message,
+          durationMs: Date.now() - started,
+        });
       throw err;
     }
   }
@@ -117,7 +118,12 @@ export class QikinkApiClient {
     payload: QikinkCreateOrderPayload,
     orderId?: string,
   ): Promise<QikinkCreateOrderResponse> {
-    return this.request<QikinkCreateOrderResponse>('POST', '/api/order/create', payload, orderId);
+    return this.request<QikinkCreateOrderResponse>(
+      'POST',
+      '/api/order/create',
+      payload,
+      orderId,
+    );
   }
 
   /**
@@ -133,7 +139,8 @@ export class QikinkApiClient {
     const endpoint = '/api/order/list';
     const qs = new URLSearchParams();
     if (params.orderId) qs.set('id', String(params.orderId));
-    else if (params.orderNumber) qs.set('order_reference_no', String(params.orderNumber));
+    else if (params.orderNumber)
+      qs.set('order_reference_no', String(params.orderNumber));
     else return null;
     qs.set('params', 'order_id,number,status,shipping');
     try {
@@ -150,14 +157,17 @@ export class QikinkApiClient {
         success?: boolean;
         data?: unknown;
       };
-      if (envelope.success === false || !Array.isArray(envelope.data)) return null;
+      if (envelope.success === false || !Array.isArray(envelope.data))
+        return null;
       const rows = envelope.data as Array<Record<string, unknown>>;
       // Never fall back to an unrelated first row. A wrong match could attach
       // another customer's fulfilment status or tracking number to this order.
       const row = rows.find((item) =>
         params.orderId
           ? String(item.order_id) === String(params.orderId)
-          : String(item.number || '').endsWith(String(params.orderNumber || '')),
+          : String(item.number || '').endsWith(
+              String(params.orderNumber || ''),
+            ),
       );
       if (!row) return null;
       const shipping =
@@ -171,14 +181,17 @@ export class QikinkApiClient {
         awb: shipping.awb as string | undefined,
         tracking_number: shipping.awb as string | undefined,
         tracking_link: shipping.tracking_link as string | undefined,
-        courier_provider_name: shipping.courier_provider_name as string | undefined,
+        courier_provider_name: shipping.courier_provider_name as
+          string | undefined,
         courier: shipping.courier_provider_name as string | undefined,
         shipping_type: row.shipping_type as string | undefined,
         payment_type: row.payment_type as string | undefined,
         raw: row,
       };
     } catch (err) {
-      this.logger.warn(`Qikink status poll unavailable: ${(err as Error).message}`);
+      this.logger.warn(
+        `Qikink status poll unavailable: ${(err as Error).message}`,
+      );
       return null;
     }
   }
@@ -188,7 +201,8 @@ export class QikinkApiClient {
    * Public docs emphasize order create; product listing may require Live API access.
    */
   async listProducts(): Promise<unknown> {
-    const endpoint = this.config.get<string>('qikink.productsEndpoint') || '/api/products';
+    const endpoint =
+      this.config.get<string>('qikink.productsEndpoint') || '/api/products';
     return this.request('GET', endpoint);
   }
 
@@ -228,7 +242,14 @@ export class QikinkApiClient {
       if (res.status === 401 && !retried) {
         this.token = null;
         await this.getAccessToken(true, logToDatabase);
-        return this.request<T>(method, path, body, orderId, true, logToDatabase);
+        return this.request<T>(
+          method,
+          path,
+          body,
+          orderId,
+          true,
+          logToDatabase,
+        );
       }
 
       if (!res.ok) {
@@ -242,31 +263,33 @@ export class QikinkApiClient {
         throw new Error(`Qikink ${method} ${path}: ${message}`);
       }
 
-      if (logToDatabase) await this.log({
-        direction: 'outbound',
-        method,
-        path,
-        orderId,
-        statusCode,
-        success: true,
-        requestBody: body as object,
-        responseBody,
-        durationMs: Date.now() - started,
-      });
+      if (logToDatabase)
+        await this.log({
+          direction: 'outbound',
+          method,
+          path,
+          orderId,
+          statusCode,
+          success: true,
+          requestBody: body as object,
+          responseBody,
+          durationMs: Date.now() - started,
+        });
       return responseBody as T;
     } catch (err) {
-      if (logToDatabase) await this.log({
-        direction: 'outbound',
-        method,
-        path,
-        orderId,
-        statusCode,
-        success: false,
-        requestBody: body as object,
-        responseBody,
-        error: (err as Error).message,
-        durationMs: Date.now() - started,
-      });
+      if (logToDatabase)
+        await this.log({
+          direction: 'outbound',
+          method,
+          path,
+          orderId,
+          statusCode,
+          success: false,
+          requestBody: body as object,
+          responseBody,
+          error: (err as Error).message,
+          durationMs: Date.now() - started,
+        });
       throw err;
     }
   }
@@ -276,22 +299,32 @@ export class QikinkApiClient {
     const value = body as Record<string, unknown>;
     if (value.error) return true;
     if (value.success === false) return true;
-    if (value.status_code != null && !['200', '1', 'success'].includes(String(value.status_code).toLowerCase())) {
+    if (
+      value.status_code != null &&
+      !['200', '1', 'success'].includes(String(value.status_code).toLowerCase())
+    ) {
       return true;
     }
-    if (value.code != null && !['1', '200', 'success'].includes(String(value.code).toLowerCase())) {
+    if (
+      value.code != null &&
+      !['1', '200', 'success'].includes(String(value.code).toLowerCase())
+    ) {
       return true;
     }
     return false;
   }
 
   private providerErrorMessage(body: unknown): string {
-    if (!body || typeof body !== 'object') return 'Provider returned an error response';
+    if (!body || typeof body !== 'object')
+      return 'Provider returned an error response';
     const value = body as Record<string, unknown>;
     const candidate = value.message || value.msg || value.error || value.status;
     if (typeof candidate === 'string') {
       return candidate
-        .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[REDACTED_EMAIL]')
+        .replace(
+          /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
+          '[REDACTED_EMAIL]',
+        )
         .replace(/\b\d{10,15}\b/g, '[REDACTED_PHONE]')
         .slice(0, 300);
     }
@@ -299,8 +332,10 @@ export class QikinkApiClient {
   }
 
   private redactSensitiveData(value: unknown): unknown {
-    const sensitiveKey = /(address|phone|mobile|email|first_?name|last_?name|full_?name|customer|recipient)/i;
-    if (Array.isArray(value)) return value.map((item) => this.redactSensitiveData(item));
+    const sensitiveKey =
+      /(address|phone|mobile|email|first_?name|last_?name|full_?name|customer|recipient)/i;
+    if (Array.isArray(value))
+      return value.map((item) => this.redactSensitiveData(item));
     if (!value || typeof value !== 'object') return value;
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([key, item]) => [
@@ -344,7 +379,9 @@ export class QikinkApiClient {
         },
       });
     } catch (err) {
-      this.logger.warn(`Failed to write Qikink API log: ${(err as Error).message}`);
+      this.logger.warn(
+        `Failed to write Qikink API log: ${(err as Error).message}`,
+      );
     }
   }
 }

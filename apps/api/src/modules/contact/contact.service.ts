@@ -19,7 +19,8 @@ export class ContactService {
   ) {}
 
   async submit(input: ContactInput) {
-    const adminEmail = this.config.get<string>('admin.email') || 'vyqourofficial@gmail.com';
+    const adminEmail =
+      this.config.get<string>('admin.email') || 'vyqourofficial@gmail.com';
     const safe = {
       name: escapeHtml(input.name),
       email: escapeHtml(input.email),
@@ -27,7 +28,9 @@ export class ContactService {
       message: escapeHtml(input.message).replace(/\n/g, '<br/>'),
     };
 
-    this.logger.log(`Contact message received from ${input.email}: ${input.subject}`);
+    this.logger.log(
+      `Contact message received from ${input.email}: ${input.subject}`,
+    );
     // Fire-and-forget: never make the visitor wait on SMTP for this response.
     // If SMTP is slow/down, MailService logs the failure — message content is also logged above.
     this.mail.sendContactMessage(adminEmail, safe).catch(() => undefined);
@@ -43,4 +46,4 @@ function escapeHtml(value: string) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
-      }
+}

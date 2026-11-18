@@ -36,19 +36,42 @@ describe('OrdersService checkout - Real PostgreSQL coupon claim Integration Test
     prisma = new PrismaService();
     await prisma.$connect();
 
-    const mockMail = { sendOrderConfirmation: jest.fn().mockResolvedValue(undefined) };
-    const mockQikink = { enqueueOrderSubmission: jest.fn().mockResolvedValue({ queued: true }) };
-    service = new OrdersService(prisma, new CartService(prisma), mockMail as any, mockQikink as any);
+    const mockMail = {
+      sendOrderConfirmation: jest.fn().mockResolvedValue(undefined),
+    };
+    const mockQikink = {
+      enqueueOrderSubmission: jest.fn().mockResolvedValue({ queued: true }),
+    };
+    service = new OrdersService(
+      prisma,
+      new CartService(prisma),
+      mockMail as any,
+      mockQikink as any,
+    );
 
     // Clean prior artifacts
-    await prisma.order.deleteMany({ where: { id: { startsWith: 'pgc_order_' } } });
-    await prisma.cart.deleteMany({ where: { id: { startsWith: 'pgc_cart_' } } });
-    await prisma.productVariant.deleteMany({ where: { id: { startsWith: 'pgc_var_' } } });
-    await prisma.product.deleteMany({ where: { id: { startsWith: 'pgc_prod_' } } });
-    await prisma.category.deleteMany({ where: { id: { startsWith: 'pgc_cat_' } } });
+    await prisma.order.deleteMany({
+      where: { id: { startsWith: 'pgc_order_' } },
+    });
+    await prisma.cart.deleteMany({
+      where: { id: { startsWith: 'pgc_cart_' } },
+    });
+    await prisma.productVariant.deleteMany({
+      where: { id: { startsWith: 'pgc_var_' } },
+    });
+    await prisma.product.deleteMany({
+      where: { id: { startsWith: 'pgc_prod_' } },
+    });
+    await prisma.category.deleteMany({
+      where: { id: { startsWith: 'pgc_cat_' } },
+    });
     await prisma.coupon.deleteMany({ where: { code: { startsWith: 'PGC' } } });
-    await prisma.address.deleteMany({ where: { id: { startsWith: 'pgc_addr_' } } });
-    await prisma.user.deleteMany({ where: { id: { startsWith: 'pgc_user_' } } });
+    await prisma.address.deleteMany({
+      where: { id: { startsWith: 'pgc_addr_' } },
+    });
+    await prisma.user.deleteMany({
+      where: { id: { startsWith: 'pgc_user_' } },
+    });
 
     const user = await prisma.user.create({
       data: {
@@ -111,7 +134,9 @@ describe('OrdersService checkout - Real PostgreSQL coupon claim Integration Test
 
   afterAll(async () => {
     if (prisma) {
-      await prisma.order.deleteMany({ where: { id: { startsWith: 'pgc_order_' } } });
+      await prisma.order.deleteMany({
+        where: { id: { startsWith: 'pgc_order_' } },
+      });
       await prisma.cart.deleteMany({ where: idPrefix('pgc_cart_') });
       await prisma.productVariant.deleteMany({ where: idPrefix('pgc_var_') });
       await prisma.product.deleteMany({ where: idPrefix('pgc_prod_') });
@@ -127,7 +152,11 @@ describe('OrdersService checkout - Real PostgreSQL coupon claim Integration Test
     return { id: { startsWith: prefix } };
   }
 
-  async function seedCoupon(code: string, usageLimit: number | null, usageCount = 0) {
+  async function seedCoupon(
+    code: string,
+    usageLimit: number | null,
+    usageCount = 0,
+  ) {
     couponCodes.push(code);
     return prisma.coupon.create({
       data: {
@@ -145,9 +174,13 @@ describe('OrdersService checkout - Real PostgreSQL coupon claim Integration Test
 
   /** Fresh cart with one variant line item and the coupon applied. */
   async function seedCartWithCoupon(couponCode: string) {
-    await prisma.cartItem.deleteMany({ where: { cartId: testCartId || '' } }).catch(() => undefined);
+    await prisma.cartItem
+      .deleteMany({ where: { cartId: testCartId || '' } })
+      .catch(() => undefined);
     if (testCartId) {
-      await prisma.cart.delete({ where: { id: testCartId } }).catch(() => undefined);
+      await prisma.cart
+        .delete({ where: { id: testCartId } })
+        .catch(() => undefined);
     }
     const cart = await prisma.cart.create({
       data: {
@@ -183,16 +216,22 @@ describe('OrdersService checkout - Real PostgreSQL coupon claim Integration Test
     ]);
 
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
-    const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+    const rejected = results.filter(
+      (r) => r.status === 'rejected',
+    ) as PromiseRejectedResult[];
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
     expect(rejected[0].reason.message).toBe('Coupon usage limit reached');
 
     // Exactly one order exists — the loser's entire checkout (order, items,
     // payment, history, stock decrement) was rolled back with its claim.
-    const orders = await prisma.order.findMany({ where: { userId: testUserId } });
+    const orders = await prisma.order.findMany({
+      where: { userId: testUserId },
+    });
     expect(orders).toHaveLength(1);
-    const orderItems = await prisma.orderItem.findMany({ where: { orderId: orders[0].id } });
+    const orderItems = await prisma.orderItem.findMany({
+      where: { orderId: orders[0].id },
+    });
     expect(orderItems).toHaveLength(1);
 
     // Exactly one usage claimed
@@ -200,12 +239,17 @@ describe('OrdersService checkout - Real PostgreSQL coupon claim Integration Test
     expect(coupon!.usageCount).toBe(1);
 
     // Stock decremented exactly once
-    const variant = await prisma.productVariant.findUnique({ where: { id: testVariantId } });
+    const variant = await prisma.productVariant.findUnique({
+      where: { id: testVariantId },
+    });
     expect(variant!.stock).toBe(99);
 
     // Clean up for subsequent tests
     await prisma.order.deleteMany({ where: { userId: testUserId } });
-    await prisma.productVariant.update({ where: { id: testVariantId }, data: { stock: 100 } });
+    await prisma.productVariant.update({
+      where: { id: testVariantId },
+      data: { stock: 100 },
+    });
   });
 
   it('a checkout failure AFTER the coupon claim rolls the claim back (no half-applied checkout)', async () => {
@@ -244,11 +288,16 @@ describe('OrdersService checkout - Real PostgreSQL coupon claim Integration Test
     const coupon = await prisma.coupon.findUnique({ where: { code } });
     expect(coupon!.usageCount).toBe(1);
 
-    const orders = await prisma.order.findMany({ where: { userId: testUserId } });
+    const orders = await prisma.order.findMany({
+      where: { userId: testUserId },
+    });
     expect(orders).toHaveLength(1);
 
     // Reset for cleanliness
     await prisma.order.deleteMany({ where: { userId: testUserId } });
-    await prisma.productVariant.update({ where: { id: testVariantId }, data: { stock: 100 } });
+    await prisma.productVariant.update({
+      where: { id: testVariantId },
+      data: { stock: 100 },
+    });
   });
 });

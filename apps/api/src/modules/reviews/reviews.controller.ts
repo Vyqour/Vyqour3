@@ -1,10 +1,29 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { IsArray, IsBoolean, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 import { ReviewsService } from './reviews.service';
 import { Public } from '../../common/decorators/public.decorator';
-import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
+import {
+  CurrentUser,
+  AuthUser,
+} from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 
 class CreateReviewDto {
@@ -26,7 +45,11 @@ export class ReviewsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.reviews.listForProduct(productId, page ? +page : 1, limit ? +limit : 10);
+    return this.reviews.listForProduct(
+      productId,
+      page ? +page : 1,
+      limit ? +limit : 10,
+    );
   }
 
   @Post('product/:productId')

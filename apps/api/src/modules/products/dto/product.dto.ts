@@ -83,11 +83,15 @@ export class ProductVariantDto {
 }
 
 export class QikinkDesignDto {
-  @ApiProperty({ description: 'Print placement, e.g. "fr" (front), "bk" (back)' })
+  @ApiProperty({
+    description: 'Print placement, e.g. "fr" (front), "bk" (back)',
+  })
   @IsString()
   placement!: string;
 
-  @ApiPropertyOptional({ description: 'Qikink placement SKU override if required' })
+  @ApiPropertyOptional({
+    description: 'Qikink placement SKU override if required',
+  })
   @IsOptional()
   @IsString()
   placementSku?: string;
@@ -114,7 +118,9 @@ export class QikinkDesignDto {
   @IsString()
   designUrl!: string;
 
-  @ApiPropertyOptional({ description: 'Internal reference mockup URL, never printed' })
+  @ApiPropertyOptional({
+    description: 'Internal reference mockup URL, never printed',
+  })
   @IsOptional()
   @IsString()
   mockupUrl?: string;
@@ -226,14 +232,16 @@ export class CreateProductDto {
   seoDescription?: string;
 
   @ApiPropertyOptional({
-    description: 'Qikink catalog SKU (My Products or SKU Description) used for fulfilment',
+    description:
+      'Qikink catalog SKU (My Products or SKU Description) used for fulfilment',
   })
   @IsOptional()
   @IsString()
   qikinkSku?: string;
 
   @ApiPropertyOptional({
-    description: 'Qikink Print Type ID (see Qikink SKU catalog). Defaults to 1.',
+    description:
+      'Qikink Print Type ID (see Qikink SKU catalog). Defaults to 1.',
   })
   @IsOptional()
   @IsNumber()
@@ -321,4 +329,4 @@ export class ProductQueryDto extends PaginationDto {
   @IsOptional()
   @IsString()
   status?: string;
-  }
+}

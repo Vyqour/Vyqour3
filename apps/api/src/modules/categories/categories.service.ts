@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
@@ -42,7 +46,8 @@ export class CategoriesService {
         _count: { select: { products: true } },
       },
     });
-    if (!category || !category.isActive) throw new NotFoundException('Category not found');
+    if (!category || !category.isActive)
+      throw new NotFoundException('Category not found');
     return category;
   }
 
@@ -51,7 +56,9 @@ export class CategoriesService {
     const exists = await this.prisma.category.findUnique({ where: { slug } });
     if (exists) throw new ConflictException('Category slug already exists');
     if (dto.parentId) {
-      const parent = await this.prisma.category.findUnique({ where: { id: dto.parentId } });
+      const parent = await this.prisma.category.findUnique({
+        where: { id: dto.parentId },
+      });
       if (!parent) throw new NotFoundException('Parent category not found');
     }
     const category = await this.prisma.category.create({
@@ -75,8 +82,11 @@ export class CategoriesService {
   async update(id: string, dto: UpdateCategoryDto) {
     await this.ensureExists(id);
     if (dto.parentId) {
-      if (dto.parentId === id) throw new ConflictException('Category cannot be its own parent');
-      const parent = await this.prisma.category.findUnique({ where: { id: dto.parentId } });
+      if (dto.parentId === id)
+        throw new ConflictException('Category cannot be its own parent');
+      const parent = await this.prisma.category.findUnique({
+        where: { id: dto.parentId },
+      });
       if (!parent) throw new NotFoundException('Parent category not found');
     }
     if (dto.slug) {
@@ -94,7 +104,8 @@ export class CategoriesService {
     if (dto.imageUrl !== undefined) data.imageUrl = dto.imageUrl;
     if (dto.sortOrder !== undefined) data.sortOrder = dto.sortOrder;
     if (dto.seoTitle !== undefined) data.seoTitle = dto.seoTitle;
-    if (dto.seoDescription !== undefined) data.seoDescription = dto.seoDescription;
+    if (dto.seoDescription !== undefined)
+      data.seoDescription = dto.seoDescription;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.parentId !== undefined) {
       if (!dto.parentId) {
@@ -112,7 +123,10 @@ export class CategoriesService {
 
   async remove(id: string) {
     await this.ensureExists(id);
-    await this.prisma.category.update({ where: { id }, data: { isActive: false } });
+    await this.prisma.category.update({
+      where: { id },
+      data: { isActive: false },
+    });
     await this.redis.delByPattern('categories:*');
     await this.redis.delByPattern('products:*');
     return { message: 'Category archived' };

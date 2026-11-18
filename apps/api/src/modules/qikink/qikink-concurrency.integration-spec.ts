@@ -32,9 +32,15 @@ describe('QikinkJobQueue Real PostgreSQL Concurrency Integration Test', () => {
     queue = new QikinkJobQueue(prisma, config);
 
     // Clean any prior test artifacts
-    await prisma.qikinkJob.deleteMany({ where: { orderId: { startsWith: 'pg_order_' } } });
-    await prisma.order.deleteMany({ where: { id: { startsWith: 'pg_order_' } } });
-    await prisma.address.deleteMany({ where: { id: { startsWith: 'pg_addr_' } } });
+    await prisma.qikinkJob.deleteMany({
+      where: { orderId: { startsWith: 'pg_order_' } },
+    });
+    await prisma.order.deleteMany({
+      where: { id: { startsWith: 'pg_order_' } },
+    });
+    await prisma.address.deleteMany({
+      where: { id: { startsWith: 'pg_addr_' } },
+    });
     await prisma.user.deleteMany({ where: { id: { startsWith: 'pg_user_' } } });
 
     // Seed required database records in PostgreSQL
@@ -143,10 +149,18 @@ describe('QikinkJobQueue Real PostgreSQL claim/ownership/crash-recovery Integrat
     workerB = new QikinkJobQueue(prisma, config);
 
     // Clean prior artifacts from both describes
-    await prisma.qikinkJob.deleteMany({ where: { orderId: { startsWith: 'pgq_order_' } } });
-    await prisma.order.deleteMany({ where: { id: { startsWith: 'pgq_order_' } } });
-    await prisma.address.deleteMany({ where: { id: { startsWith: 'pgq_addr_' } } });
-    await prisma.user.deleteMany({ where: { id: { startsWith: 'pgq_user_' } } });
+    await prisma.qikinkJob.deleteMany({
+      where: { orderId: { startsWith: 'pgq_order_' } },
+    });
+    await prisma.order.deleteMany({
+      where: { id: { startsWith: 'pgq_order_' } },
+    });
+    await prisma.address.deleteMany({
+      where: { id: { startsWith: 'pgq_addr_' } },
+    });
+    await prisma.user.deleteMany({
+      where: { id: { startsWith: 'pgq_user_' } },
+    });
 
     const ts = Date.now();
     const user = await prisma.user.create({
@@ -192,17 +206,26 @@ describe('QikinkJobQueue Real PostgreSQL claim/ownership/crash-recovery Integrat
     if (prisma) {
       await prisma.qikinkJob.deleteMany({ where: { orderId: testOrderId } });
       await prisma.order.deleteMany({ where: { id: testOrderId } });
-      await prisma.address.deleteMany({ where: { id: { startsWith: 'pgq_addr_' } } });
-      await prisma.user.deleteMany({ where: { id: { startsWith: 'pgq_user_' } } });
+      await prisma.address.deleteMany({
+        where: { id: { startsWith: 'pgq_addr_' } },
+      });
+      await prisma.user.deleteMany({
+        where: { id: { startsWith: 'pgq_user_' } },
+      });
       await prisma.$disconnect();
     }
   });
 
   it('two concurrent claimNext calls: exactly one worker owns the job', async () => {
     await prisma.qikinkJob.deleteMany({ where: { orderId: testOrderId } });
-    const job = await workerA.enqueue(QikinkJobType.SUBMIT_ORDER, { orderId: testOrderId });
+    const job = await workerA.enqueue(QikinkJobType.SUBMIT_ORDER, {
+      orderId: testOrderId,
+    });
 
-    const [claimA, claimB] = await Promise.all([workerA.claimNext(), workerB.claimNext()]);
+    const [claimA, claimB] = await Promise.all([
+      workerA.claimNext(),
+      workerB.claimNext(),
+    ]);
 
     const winners = [claimA, claimB].filter(Boolean);
     expect(winners).toHaveLength(1);
@@ -217,7 +240,9 @@ describe('QikinkJobQueue Real PostgreSQL claim/ownership/crash-recovery Integrat
 
   it('a stale worker cannot complete or fail a job owned by another worker (ownership guard)', async () => {
     await prisma.qikinkJob.deleteMany({ where: { orderId: testOrderId } });
-    const job = await workerA.enqueue(QikinkJobType.SUBMIT_ORDER, { orderId: testOrderId });
+    const job = await workerA.enqueue(QikinkJobType.SUBMIT_ORDER, {
+      orderId: testOrderId,
+    });
 
     const claimedByA = await workerA.claimNext();
     expect(claimedByA?.id).toBe(job.id);
@@ -228,7 +253,9 @@ describe('QikinkJobQueue Real PostgreSQL claim/ownership/crash-recovery Integrat
     expect(foreignComplete.count).toBe(0);
     expect(foreignFail.count).toBe(0);
 
-    const stillOwned = await prisma.qikinkJob.findUnique({ where: { id: job.id } });
+    const stillOwned = await prisma.qikinkJob.findUnique({
+      where: { id: job.id },
+    });
     expect(stillOwned!.status).toBe(QikinkJobStatus.PROCESSING);
     expect(stillOwned!.lockedBy).toBe(claimedByA!.lockedBy);
     expect(stillOwned!.result).toBeNull();
@@ -240,12 +267,16 @@ describe('QikinkJobQueue Real PostgreSQL claim/ownership/crash-recovery Integrat
     expect(done!.status).toBe(QikinkJobStatus.COMPLETED);
   });
 
-  it('worker-crash recovery: stale lock reclaimed, dead worker\'s late completion ignored', async () => {
+  it("worker-crash recovery: stale lock reclaimed, dead worker's late completion ignored", async () => {
     await prisma.qikinkJob.deleteMany({ where: { orderId: testOrderId } });
-    const job = await workerA.enqueue(QikinkJobType.SUBMIT_ORDER, { orderId: testOrderId });
+    const job = await workerA.enqueue(QikinkJobType.SUBMIT_ORDER, {
+      orderId: testOrderId,
+    });
 
     await workerA.claimNext();
-    const crashedOwner = await prisma.qikinkJob.findUnique({ where: { id: job.id } });
+    const crashedOwner = await prisma.qikinkJob.findUnique({
+      where: { id: job.id },
+    });
     expect(crashedOwner!.lockedBy).toBeTruthy();
 
     // Crash: A's lock ages past the 60s timeout without resolution
@@ -265,7 +296,9 @@ describe('QikinkJobQueue Real PostgreSQL claim/ownership/crash-recovery Integrat
     const lateComplete = await workerA.complete(job.id, { zombie: true });
     expect(lateComplete.count).toBe(0);
 
-    const ownedByB = await prisma.qikinkJob.findUnique({ where: { id: job.id } });
+    const ownedByB = await prisma.qikinkJob.findUnique({
+      where: { id: job.id },
+    });
     expect(ownedByB!.status).toBe(QikinkJobStatus.PROCESSING);
     expect(ownedByB!.result).toBeNull();
 
@@ -276,9 +309,11 @@ describe('QikinkJobQueue Real PostgreSQL claim/ownership/crash-recovery Integrat
     expect(final!.status).toBe(QikinkJobStatus.COMPLETED);
   });
 
-  it('a live worker\'s fresh in-flight job is NOT reclaimed before the lock timeout', async () => {
+  it("a live worker's fresh in-flight job is NOT reclaimed before the lock timeout", async () => {
     await prisma.qikinkJob.deleteMany({ where: { orderId: testOrderId } });
-    const job = await workerA.enqueue(QikinkJobType.SUBMIT_ORDER, { orderId: testOrderId });
+    const job = await workerA.enqueue(QikinkJobType.SUBMIT_ORDER, {
+      orderId: testOrderId,
+    });
     await workerA.claimNext();
 
     // Worker B has nothing claimable and must not steal A's fresh lock

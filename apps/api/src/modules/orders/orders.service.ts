@@ -6,13 +6,22 @@ import {
   NotFoundException,
   forwardRef,
 } from '@nestjs/common';
-import { OrderStatus, PaymentMethod, PaymentStatus, Prisma } from '@prisma/client';
+import {
+  OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../../mail/mail.service';
 import { CartService } from '../cart/cart.service';
 import { paginate, paginationMeta } from '../../common/dto/pagination.dto';
 import { generateOrderNumber } from '../../common/utils/slug.util';
-import { CreateOrderDto, OrderQueryDto, UpdateOrderStatusDto } from './dto/order.dto';
+import {
+  CreateOrderDto,
+  OrderQueryDto,
+  UpdateOrderStatusDto,
+} from './dto/order.dto';
 import { QikinkService } from '../qikink/qikink.service';
 
 /**
@@ -22,8 +31,16 @@ import { QikinkService } from '../qikink/qikink.service';
  * RETURNED can only move to REFUNDED (the return-refund workflow).
  */
 export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.CANCELLED],
-  [OrderStatus.CONFIRMED]: [OrderStatus.PROCESSING, OrderStatus.SHIPPED, OrderStatus.CANCELLED],
+  [OrderStatus.PENDING]: [
+    OrderStatus.CONFIRMED,
+    OrderStatus.PROCESSING,
+    OrderStatus.CANCELLED,
+  ],
+  [OrderStatus.CONFIRMED]: [
+    OrderStatus.PROCESSING,
+    OrderStatus.SHIPPED,
+    OrderStatus.CANCELLED,
+  ],
   [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
   [OrderStatus.SHIPPED]: [
     OrderStatus.OUT_FOR_DELIVERY,
@@ -31,7 +48,11 @@ export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
     OrderStatus.RETURNED,
     OrderStatus.CANCELLED,
   ],
-  [OrderStatus.OUT_FOR_DELIVERY]: [OrderStatus.DELIVERED, OrderStatus.RETURNED, OrderStatus.CANCELLED],
+  [OrderStatus.OUT_FOR_DELIVERY]: [
+    OrderStatus.DELIVERED,
+    OrderStatus.RETURNED,
+    OrderStatus.CANCELLED,
+  ],
   [OrderStatus.DELIVERED]: [OrderStatus.RETURNED, OrderStatus.REFUNDED],
   [OrderStatus.RETURNED]: [OrderStatus.REFUNDED],
   [OrderStatus.CANCELLED]: [],
@@ -66,9 +87,16 @@ export class OrdersService {
 
     // Stock check
     for (const item of cart.items) {
+      if (item.product?.status && item.product.status !== 'ACTIVE') {
+        throw new BadRequestException(
+          `Product unavailable: ${item.product.name}`,
+        );
+      }
       if (item.variantId && item.variant) {
         if (item.variant.stock < item.quantity) {
-          throw new BadRequestException(`Insufficient stock for ${item.product.name}`);
+          throw new BadRequestException(
+            `Insufficient stock for ${item.product.name}`,
+          );
         }
       }
     }
@@ -101,7 +129,10 @@ export class OrdersService {
               productId: item.productId,
               variantId: item.variantId,
               productName: item.product.name,
-              variantLabel: [item.variant?.size, item.variant?.color].filter(Boolean).join(' / ') || null,
+              variantLabel:
+                [item.variant?.size, item.variant?.color]
+                  .filter(Boolean)
+                  .join(' / ') || null,
               sku: item.variant?.sku,
               imageUrl: item.product.images[0]?.url,
               unitPrice: item.unitPrice,
@@ -140,7 +171,9 @@ export class OrdersService {
             data: { stock: { decrement: item.quantity } },
           });
           if (!decremented.count) {
-            throw new BadRequestException(`Insufficient stock for ${item.product.name}`);
+            throw new BadRequestException(
+              `Insufficient stock for ${item.product.name}`,
+            );
           }
         }
         await tx.product.update({
@@ -155,7 +188,9 @@ export class OrdersService {
         // so two concurrent checkouts can never both claim the last available use.
         // A null usageLimit means unlimited usage. Any failure later in this
         // transaction rolls the claim back automatically.
-        const coupon = await tx.coupon.findUnique({ where: { code: summary.couponCode } });
+        const coupon = await tx.coupon.findUnique({
+          where: { code: summary.couponCode },
+        });
         const now = new Date();
         if (!coupon || !coupon.isActive) {
           throw new BadRequestException('Invalid coupon');
@@ -163,9 +198,12 @@ export class OrdersService {
         if (
           coupon.startsAt > now ||
           coupon.expiresAt < now ||
-          (coupon.minOrderAmount != null && summary.subtotal < Number(coupon.minOrderAmount))
+          (coupon.minOrderAmount != null &&
+            summary.subtotal < Number(coupon.minOrderAmount))
         ) {
-          throw new BadRequestException('Coupon is no longer valid for this order');
+          throw new BadRequestException(
+            'Coupon is no longer valid for this order',
+          );
         }
         const claimed = await tx.coupon.updateMany({
           where: {
@@ -173,7 +211,9 @@ export class OrdersService {
             isActive: true,
             startsAt: { lte: now },
             expiresAt: { gte: now },
-            ...(coupon.usageLimit != null ? { usageCount: { lt: coupon.usageLimit } } : {}),
+            ...(coupon.usageLimit != null
+              ? { usageCount: { lt: coupon.usageLimit } }
+              : {}),
           },
           data: { usageCount: { increment: 1 } },
         });
@@ -188,14 +228,19 @@ export class OrdersService {
             where: { userId, couponCode: summary.couponCode },
           });
           if (customerUses > coupon.perUserLimit) {
-            throw new BadRequestException('You have already used this coupon the maximum number of times');
+            throw new BadRequestException(
+              'You have already used this coupon the maximum number of times',
+            );
           }
         }
       }
 
       // Clear cart
       await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
-      await tx.cart.update({ where: { id: cart.id }, data: { couponCode: null } });
+      await tx.cart.update({
+        where: { id: cart.id },
+        data: { couponCode: null },
+      });
 
       // Auto-confirm COD
       if (dto.paymentMethod === PaymentMethod.COD) {
@@ -216,13 +261,19 @@ export class OrdersService {
     });
 
     // Fire-and-forget: a slow/unreachable SMTP server must never block or fail order placement
-this.mail
-  .sendOrderConfirmation(order.user.email, order.orderNumber, String(order.total))
-  .catch(() => undefined);
+    this.mail
+      .sendOrderConfirmation(
+        order.user.email,
+        order.orderNumber,
+        String(order.total),
+      )
+      .catch(() => undefined);
 
     // COD: confirmed immediately → queue Qikink fulfillment (idempotent)
     if (dto.paymentMethod === PaymentMethod.COD) {
-      await this.qikink.enqueueOrderSubmission(order.id, 'cod_confirmed').catch(() => undefined);
+      await this.qikink
+        .enqueueOrderSubmission(order.id, 'cod_confirmed')
+        .catch(() => undefined);
     }
 
     return this.findOne(order.id, userId);
@@ -240,7 +291,15 @@ this.mail
         where,
         include: {
           items: true,
-          user: { select: { id: true, email: true, firstName: true, lastName: true, phone: true } },
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+            },
+          },
           shippingAddress: true,
         },
         orderBy: { createdAt: 'desc' },
@@ -263,7 +322,15 @@ this.mail
         billingAddress: true,
         statusHistory: { orderBy: { createdAt: 'asc' } },
         payments: true,
-        user: { select: { id: true, email: true, firstName: true, lastName: true, phone: true } },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+          },
+        },
       },
     });
     if (!order) throw new NotFoundException('Order not found');
@@ -274,7 +341,8 @@ this.mail
   }
 
   async track(orderNumber: string, email: string) {
-    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const normalizedEmail =
+      typeof email === 'string' ? email.trim().toLowerCase() : '';
     if (!normalizedEmail) throw new NotFoundException('Order not found');
 
     const order = await this.prisma.order.findUnique({
@@ -341,7 +409,9 @@ this.mail
     if (status === OrderStatus.DELIVERED) {
       data.deliveredAt = new Date();
       data.paymentStatus =
-        order.paymentMethod === PaymentMethod.COD ? PaymentStatus.PAID : order.paymentStatus;
+        order.paymentMethod === PaymentMethod.COD
+          ? PaymentStatus.PAID
+          : order.paymentStatus;
     }
     if (status === OrderStatus.CANCELLED) data.cancelledAt = new Date();
 
@@ -384,7 +454,10 @@ this.mail
 
   async cancel(id: string, userId: string, reason?: string) {
     const order = await this.findOne(id, userId);
-    const cancellable: OrderStatus[] = [OrderStatus.PENDING, OrderStatus.CONFIRMED];
+    const cancellable: OrderStatus[] = [
+      OrderStatus.PENDING,
+      OrderStatus.CONFIRMED,
+    ];
     await this.prisma.$transaction(async (tx) => {
       // Atomic guard: a repeated or concurrent cancel finds no row matching the
       // cancellable statuses, so it cannot restock or write history twice.
@@ -397,7 +470,9 @@ this.mail
         },
       });
       if (!updated.count) {
-        throw new BadRequestException('Order cannot be cancelled at this stage');
+        throw new BadRequestException(
+          'Order cannot be cancelled at this stage',
+        );
       }
       // Restock inside the same transaction so a failed cancel rolls back the
       // inventory change.
@@ -438,7 +513,15 @@ this.mail
         where,
         include: {
           items: true,
-          user: { select: { id: true, email: true, firstName: true, lastName: true, phone: true } },
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+            },
+          },
           shippingAddress: true,
         },
         orderBy: { createdAt: 'desc' },

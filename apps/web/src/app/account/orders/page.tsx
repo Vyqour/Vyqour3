@@ -38,7 +38,6 @@ export default function OrdersPage() {
   useEffect(() => {
     if (!user) return;
     loadOrders();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const retryPayment = async (order: Order) => {

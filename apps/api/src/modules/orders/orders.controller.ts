@@ -1,10 +1,25 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { OrdersService } from './orders.service';
-import { CreateOrderDto, OrderQueryDto, UpdateOrderStatusDto } from './dto/order.dto';
-import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
+import {
+  CreateOrderDto,
+  OrderQueryDto,
+  UpdateOrderStatusDto,
+} from './dto/order.dto';
+import {
+  CurrentUser,
+  AuthUser,
+} from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 
@@ -28,7 +43,10 @@ export class OrdersController {
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Get('track/:orderNumber')
-  track(@Param('orderNumber') orderNumber: string, @Query('email') email: string) {
+  track(
+    @Param('orderNumber') orderNumber: string,
+    @Query('email') email: string,
+  ) {
     return this.orders.track(orderNumber, email);
   }
 

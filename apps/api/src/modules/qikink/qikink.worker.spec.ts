@@ -1,4 +1,8 @@
-import { QikinkJobStatus, QikinkJobType, QikinkSyncStatus } from '@prisma/client';
+import {
+  QikinkJobStatus,
+  QikinkJobType,
+  QikinkSyncStatus,
+} from '@prisma/client';
 import { QikinkWorker } from './qikink.worker';
 
 describe('QikinkWorker - retry, dead-letter, completed-submission protection', () => {
@@ -49,23 +53,39 @@ describe('QikinkWorker - retry, dead-letter, completed-submission protection', (
   }
 
   it('completes a successful submission job', async () => {
-    mockQueue.claimNext.mockResolvedValueOnce(submitJob).mockResolvedValue(null);
-    mockQikink.processSubmitJob.mockResolvedValue({ success: true, qikinkOrderId: 'QIK1' });
+    mockQueue.claimNext
+      .mockResolvedValueOnce(submitJob)
+      .mockResolvedValue(null);
+    mockQikink.processSubmitJob.mockResolvedValue({
+      success: true,
+      qikinkOrderId: 'QIK1',
+    });
 
     await runTick();
 
-    expect(mockQueue.complete).toHaveBeenCalledWith('job_1', { success: true, qikinkOrderId: 'QIK1' });
+    expect(mockQueue.complete).toHaveBeenCalledWith('job_1', {
+      success: true,
+      qikinkOrderId: 'QIK1',
+    });
     expect(mockQueue.fail).not.toHaveBeenCalled();
     expect(mockPrisma.order.updateMany).not.toHaveBeenCalled();
   });
 
   it('retries transient failures via queue.fail and does not mark the order FAILED', async () => {
-    mockQueue.claimNext.mockResolvedValueOnce(submitJob).mockResolvedValue(null);
+    mockQueue.claimNext
+      .mockResolvedValueOnce(submitJob)
+      .mockResolvedValue(null);
     mockQikink.processSubmitJob.mockRejectedValue(new Error('Network timeout'));
 
     await runTick();
 
-    expect(mockQueue.fail).toHaveBeenCalledWith('job_1', 'Network timeout', 1, 3, false);
+    expect(mockQueue.fail).toHaveBeenCalledWith(
+      'job_1',
+      'Network timeout',
+      1,
+      3,
+      false,
+    );
     // Not final attempt -> no FAILED marking on the order at all
     expect(mockPrisma.order.updateMany).not.toHaveBeenCalled();
   });
@@ -73,12 +93,20 @@ describe('QikinkWorker - retry, dead-letter, completed-submission protection', (
   it('marks the order FAILED on permanent errors using a guard that cannot touch submitted orders', async () => {
     const err: any = new Error('Validation failed');
     err.isPermanent = true;
-    mockQueue.claimNext.mockResolvedValueOnce(submitJob).mockResolvedValue(null);
+    mockQueue.claimNext
+      .mockResolvedValueOnce(submitJob)
+      .mockResolvedValue(null);
     mockQikink.processSubmitJob.mockRejectedValue(err);
 
     await runTick();
 
-    expect(mockQueue.fail).toHaveBeenCalledWith('job_1', 'Validation failed', 1, 3, true);
+    expect(mockQueue.fail).toHaveBeenCalledWith(
+      'job_1',
+      'Validation failed',
+      1,
+      3,
+      true,
+    );
     // Guarded update: excludes orders that already carry a provider order ID or
     // are marked SUBMITTED — a completed submission can never become FAILED.
     expect(mockPrisma.order.updateMany).toHaveBeenCalledWith({
@@ -96,19 +124,29 @@ describe('QikinkWorker - retry, dead-letter, completed-submission protection', (
 
   it('marks the order FAILED only when attempts are exhausted (worker-crash retry exhaustion)', async () => {
     const exhausted = { ...submitJob, attempts: 3 }; // attempts >= maxAttempts
-    mockQueue.claimNext.mockResolvedValueOnce(exhausted).mockResolvedValue(null);
+    mockQueue.claimNext
+      .mockResolvedValueOnce(exhausted)
+      .mockResolvedValue(null);
     mockQikink.processSubmitJob.mockRejectedValue(new Error('still down'));
 
     await runTick();
 
-    expect(mockQueue.fail).toHaveBeenCalledWith('job_1', 'still down', 3, 3, false);
+    expect(mockQueue.fail).toHaveBeenCalledWith(
+      'job_1',
+      'still down',
+      3,
+      3,
+      false,
+    );
     expect(mockPrisma.order.updateMany).toHaveBeenCalled();
   });
 
   it('never overwrites a completed submission: guard matches nothing, so SUBMITTED stays intact', async () => {
     const err: any = new Error('boom after submit');
     err.isPermanent = true;
-    mockQueue.claimNext.mockResolvedValueOnce(submitJob).mockResolvedValue(null);
+    mockQueue.claimNext
+      .mockResolvedValueOnce(submitJob)
+      .mockResolvedValue(null);
     mockQikink.processSubmitJob.mockRejectedValue(err);
     // The guarded update matches no rows: order already has qikinkOrderId/SUBMITTED
     mockPrisma.order.updateMany.mockResolvedValue({ count: 0 });
@@ -119,7 +157,9 @@ describe('QikinkWorker - retry, dead-letter, completed-submission protection', (
     // zero-row result is swallowed — SUBMITTED state is untouched.
     expect(mockPrisma.order.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ qikinkSyncStatus: { not: QikinkSyncStatus.SUBMITTED } }),
+        where: expect.objectContaining({
+          qikinkSyncStatus: { not: QikinkSyncStatus.SUBMITTED },
+        }),
       }),
     );
   });
@@ -133,9 +173,13 @@ describe('QikinkWorker - retry, dead-letter, completed-submission protection', (
       attempts: 2,
       maxAttempts: 8,
     };
-    mockQueue.claimNext.mockResolvedValueOnce(statusJob).mockResolvedValue(null);
+    mockQueue.claimNext
+      .mockResolvedValueOnce(statusJob)
+      .mockResolvedValue(null);
     mockQikink.processStatusSync.mockRejectedValue(
-      new Error('Qikink order status unavailable or not found; retry scheduled'),
+      new Error(
+        'Qikink order status unavailable or not found; retry scheduled',
+      ),
     );
 
     await runTick();

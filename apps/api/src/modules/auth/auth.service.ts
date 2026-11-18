@@ -90,7 +90,9 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email.toLowerCase() } });
+    const existing = await this.prisma.user.findUnique({
+      where: { email: dto.email.toLowerCase() },
+    });
     if (existing) throw new ConflictException('Email already registered');
 
     const passwordHash = await this.hash(dto.password);
@@ -112,8 +114,10 @@ export class AuthService {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
     });
-   // Fire-and-forget: never let a slow/unreachable SMTP server delay or fail registration
-    this.mail.sendVerificationEmail(user.email, verifyToken).catch(() => undefined);
+    // Fire-and-forget: never let a slow/unreachable SMTP server delay or fail registration
+    this.mail
+      .sendVerificationEmail(user.email, verifyToken)
+      .catch(() => undefined);
 
     const accessToken = this.signAccess(user);
     const refreshToken = await this.issueRefreshToken(user.id);
@@ -125,7 +129,10 @@ export class AuthService {
     };
   }
 
-  async login(dto: LoginDto, meta?: { userAgent?: string; ipAddress?: string }) {
+  async login(
+    dto: LoginDto,
+    meta?: { userAgent?: string; ipAddress?: string },
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
     });
@@ -154,7 +161,8 @@ export class AuthService {
       include: { user: true },
     });
     if (!stored || stored.expiresAt < new Date()) {
-      if (stored) await this.prisma.refreshToken.delete({ where: { id: stored.id } });
+      if (stored)
+        await this.prisma.refreshToken.delete({ where: { id: stored.id } });
       throw new UnauthorizedException('Invalid refresh token');
     }
     if (stored.user.status !== 'ACTIVE') {
@@ -175,7 +183,9 @@ export class AuthService {
 
   async logout(refreshToken?: string) {
     if (refreshToken) {
-      await this.prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
+      await this.prisma.refreshToken.deleteMany({
+        where: { token: refreshToken },
+      });
     }
     return { message: 'Logged out' };
   }
@@ -203,14 +213,18 @@ export class AuthService {
 
       // Await the mail provider so delivery failures are detected internally.
       // Never expose account existence or delivery status in the public response.
-      const delivered = await this.mail.sendPasswordResetEmail(user.email, token);
+      const delivered = await this.mail.sendPasswordResetEmail(
+        user.email,
+        token,
+      );
       if (!delivered) {
         await this.prisma.passwordResetToken.delete({ where: { token } });
       }
     }
 
     return {
-      message: 'If an account exists, a reset link will be sent when email delivery is available.',
+      message:
+        'If an account exists, a reset link will be sent when email delivery is available.',
     };
   }
 
@@ -257,11 +271,15 @@ export class AuthService {
 
   async changePassword(userId: string, dto: ChangePasswordDto) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.passwordHash) throw new BadRequestException('Password login not available');
+    if (!user?.passwordHash)
+      throw new BadRequestException('Password login not available');
     const ok = await this.compare(dto.currentPassword, user.passwordHash);
     if (!ok) throw new UnauthorizedException('Current password is incorrect');
     const passwordHash = await this.hash(dto.newPassword);
-    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
     await this.prisma.refreshToken.deleteMany({ where: { userId } });
     return { message: 'Password changed successfully' };
   }
@@ -293,7 +311,9 @@ export class AuthService {
           throw new UnauthorizedException('Account is inactive');
         }
         if (emailUser.googleId && emailUser.googleId !== profile.googleId) {
-          throw new ConflictException('This email is linked to another Google account');
+          throw new ConflictException(
+            'This email is linked to another Google account',
+          );
         }
         user = await this.prisma.user.update({
           where: { id: emailUser.id },

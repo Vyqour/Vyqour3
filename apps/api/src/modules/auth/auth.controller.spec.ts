@@ -11,7 +11,8 @@ describe('GoogleConfiguredGuard', () => {
     const guard = makeGuard({
       'google.clientId': 'client-id',
       'google.clientSecret': 'client-secret',
-      'google.callbackUrl': 'https://api.vyqour.example/api/v1/auth/google/callback',
+      'google.callbackUrl':
+        'https://api.vyqour.example/api/v1/auth/google/callback',
       webUrl: 'https://vyqour.example',
       nodeEnv: 'production',
     });
@@ -23,7 +24,8 @@ describe('GoogleConfiguredGuard', () => {
     const guard = makeGuard({
       'google.clientId': 'client-id',
       'google.clientSecret': 'client-secret',
-      'google.callbackUrl': 'ttps\\://api.vyqour.example/api/v1/auth/google/callback',
+      'google.callbackUrl':
+        'ttps\\://api.vyqour.example/api/v1/auth/google/callback',
       webUrl: 'https://vyqour.example',
       nodeEnv: 'production',
     });
@@ -33,7 +35,8 @@ describe('GoogleConfiguredGuard', () => {
 
   it('rejects missing credentials with a clear configuration error', () => {
     const guard = makeGuard({
-      'google.callbackUrl': 'https://api.vyqour.example/api/v1/auth/google/callback',
+      'google.callbackUrl':
+        'https://api.vyqour.example/api/v1/auth/google/callback',
       webUrl: 'https://vyqour.example',
       nodeEnv: 'production',
     });

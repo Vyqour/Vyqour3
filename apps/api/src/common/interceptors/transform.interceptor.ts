@@ -13,11 +13,22 @@ export interface ApiResponse<T> {
 }
 
 @Injectable()
-export class TransformInterceptor<T> implements NestInterceptor<T, ApiResponse<T>> {
-  intercept(_context: ExecutionContext, next: CallHandler): Observable<ApiResponse<T>> {
+export class TransformInterceptor<T> implements NestInterceptor<
+  T,
+  ApiResponse<T>
+> {
+  intercept(
+    _context: ExecutionContext,
+    next: CallHandler,
+  ): Observable<ApiResponse<T>> {
     return next.handle().pipe(
       map((data) => {
-        if (data && typeof data === 'object' && 'data' in (data as object) && 'meta' in (data as object)) {
+        if (
+          data &&
+          typeof data === 'object' &&
+          'data' in (data as object) &&
+          'meta' in (data as object)
+        ) {
           return {
             success: true,
             ...(data as object),

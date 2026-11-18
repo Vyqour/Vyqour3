@@ -7,8 +7,7 @@ const LOCALHOST_ORIGIN =
   /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$/i;
 
 /** GitHub Codespaces forwarded ports, e.g. https://name-3000.app.github.dev */
-const CODESPACES_ORIGIN =
-  /^https:\/\/([a-z0-9-]+)-\d+\.app\.github\.dev$/i;
+const CODESPACES_ORIGIN = /^https:\/\/([a-z0-9-]+)-\d+\.app\.github\.dev$/i;
 
 /** githubpreview / github.dev variants */
 const GITHUB_PREVIEW_ORIGIN =
@@ -23,10 +22,7 @@ export function parseCorsOrigins(raw?: string | string[] | null): string[] {
     return raw.map(trimOrigin).filter(Boolean);
   }
   if (!raw || typeof raw !== 'string') return [];
-  return raw
-    .split(',')
-    .map(trimOrigin)
-    .filter(Boolean);
+  return raw.split(',').map(trimOrigin).filter(Boolean);
 }
 
 export function isDynamicDevOrigin(origin: string): boolean {

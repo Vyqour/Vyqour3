@@ -62,7 +62,9 @@ describe('AuthService Google account validation', () => {
       emailVerified: true,
       emailVerifiedAt: new Date(),
     });
-    prisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    prisma.user.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
     prisma.user.create.mockResolvedValue(created);
 
     const result = await service.validateGoogleUser({
@@ -94,7 +96,9 @@ describe('AuthService Google account validation', () => {
       emailVerified: true,
       emailVerifiedAt: new Date(),
     });
-    prisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(existing);
+    prisma.user.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(existing);
     prisma.user.update.mockResolvedValue(linked);
 
     await service.validateGoogleUser({
@@ -107,13 +111,18 @@ describe('AuthService Google account validation', () => {
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'user_123' },
-        data: expect.objectContaining({ googleId: 'google_1', emailVerified: true }),
+        data: expect.objectContaining({
+          googleId: 'google_1',
+          emailVerified: true,
+        }),
       }),
     );
   });
 
   it('rejects inactive Google accounts', async () => {
-    prisma.user.findUnique.mockResolvedValue(user({ googleId: 'google_1', status: 'SUSPENDED' }));
+    prisma.user.findUnique.mockResolvedValue(
+      user({ googleId: 'google_1', status: 'SUSPENDED' }),
+    );
 
     await expect(
       service.validateGoogleUser({

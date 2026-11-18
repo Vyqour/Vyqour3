@@ -16,10 +16,16 @@ export class MediaService {
     const apiKey = this.config.get<string>('cloudinary.apiKey');
     const apiSecret = this.config.get<string>('cloudinary.apiSecret');
     if (cloudName && apiKey && apiSecret) {
-      cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
+      cloudinary.config({
+        cloud_name: cloudName,
+        api_key: apiKey,
+        api_secret: apiSecret,
+      });
       this.configured = true;
     } else {
-      this.logger.warn('Cloudinary not configured — media uploads will use placeholder URLs');
+      this.logger.warn(
+        'Cloudinary not configured — media uploads will use placeholder URLs',
+      );
     }
   }
 
@@ -57,7 +63,8 @@ export class MediaService {
         { folder, resource_type: 'auto' },
         (err, res) => {
           if (err || !res) reject(err || new Error('Upload failed'));
-          else resolve(res as typeof result extends Promise<infer R> ? R : never);
+          else
+            resolve(res as typeof result extends Promise<infer R> ? R : never);
         },
       );
       stream.end(file.buffer);

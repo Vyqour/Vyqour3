@@ -6,7 +6,9 @@ describe('AdminService dashboard', () => {
   const prisma = {
     order: {
       count: jest.fn().mockResolvedValue(0),
-      aggregate: jest.fn().mockResolvedValue({ _sum: { total: null }, _count: 0 }),
+      aggregate: jest
+        .fn()
+        .mockResolvedValue({ _sum: { total: null }, _count: 0 }),
       findMany: jest.fn().mockResolvedValue([]),
       groupBy: jest.fn().mockResolvedValue([]),
     },
@@ -35,7 +37,11 @@ describe('AdminService dashboard', () => {
     const revenueFilter = {
       paymentStatus: PaymentStatus.PAID,
       status: {
-        notIn: [OrderStatus.CANCELLED, OrderStatus.REFUNDED, OrderStatus.RETURNED],
+        notIn: [
+          OrderStatus.CANCELLED,
+          OrderStatus.REFUNDED,
+          OrderStatus.RETURNED,
+        ],
       },
     };
 

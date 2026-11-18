@@ -18,7 +18,14 @@ export class ReviewsService {
       this.prisma.review.findMany({
         where,
         include: {
-          user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -34,14 +41,20 @@ export class ReviewsService {
     productId: string,
     dto: { rating: number; title?: string; body: string; images?: string[] },
   ) {
-    if (dto.rating < 1 || dto.rating > 5) throw new BadRequestException('Rating must be 1-5');
-    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (dto.rating < 1 || dto.rating > 5)
+      throw new BadRequestException('Rating must be 1-5');
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
     if (!product) throw new NotFoundException('Product not found');
 
     const purchased = await this.prisma.orderItem.findFirst({
       where: {
         productId,
-        order: { userId, status: { in: ['DELIVERED', 'SHIPPED', 'CONFIRMED', 'PROCESSING'] } },
+        order: {
+          userId,
+          status: { in: ['DELIVERED', 'SHIPPED', 'CONFIRMED', 'PROCESSING'] },
+        },
       },
     });
 

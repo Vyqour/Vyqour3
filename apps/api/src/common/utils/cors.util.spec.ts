@@ -11,7 +11,8 @@ function assert(cond: unknown, msg: string) {
 
 function run() {
   assert(
-    parseCorsOrigins('http://localhost:3000, https://x.app.github.dev/').length === 2,
+    parseCorsOrigins('http://localhost:3000, https://x.app.github.dev/')
+      .length === 2,
     'parseCorsOrigins splits and trims',
   );
 

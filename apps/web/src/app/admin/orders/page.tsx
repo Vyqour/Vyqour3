@@ -46,6 +46,43 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [liveStatusMap, setLiveStatusMap] = useState<
+    Record<
+      string,
+      {
+        loading?: boolean;
+        data?: {
+          success: boolean;
+          status?: string | null;
+          awb?: string | null;
+          courier?: string | null;
+          trackingLink?: string | null;
+          reason?: string;
+        };
+        error?: string;
+      }
+    >
+  >({});
+
+  const checkLiveStatus = async (orderId: string) => {
+    setLiveStatusMap((prev) => ({
+      ...prev,
+      [orderId]: { loading: true },
+    }));
+    try {
+      const res = await fetch(`/api/admin/qikink/orders/${encodeURIComponent(orderId)}/live-status`);
+      const data = await res.json();
+      setLiveStatusMap((prev) => ({
+        ...prev,
+        [orderId]: { loading: false, data },
+      }));
+    } catch (e) {
+      setLiveStatusMap((prev) => ({
+        ...prev,
+        [orderId]: { loading: false, error: e instanceof Error ? e.message : 'Lookup failed' },
+      }));
+    }
+  };
 
   useEffect(() => {
     apiClient
@@ -192,6 +229,15 @@ export default function AdminOrdersPage() {
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
+                    {o.qikinkOrderId && (
+                      <button
+                        onClick={() => checkLiveStatus(o.id)}
+                        disabled={liveStatusMap[o.id]?.loading}
+                        className="rounded-lg border border-primary/50 bg-primary/20 px-3 py-1.5 text-xs text-white hover:bg-primary/30"
+                      >
+                        {liveStatusMap[o.id]?.loading ? 'Checking...' : 'Check Qikink Live Status'}
+                      </button>
+                    )}
                     <button
                       onClick={() => copyText(buildQikinkText(o), 'Order details')}
                       className="rounded-lg border border-primary/50 bg-primary/10 px-3 py-1.5 text-xs text-white hover:bg-primary/20"
@@ -205,6 +251,40 @@ export default function AdminOrdersPage() {
                       Copy internal order ID
                     </button>
                   </div>
+
+                  {liveStatusMap[o.id]?.data && (
+                    <div className="mt-3 rounded-lg border border-white/10 bg-black/40 p-3 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-primary-glow">Qikink Live Status:</span>
+                        <span className="font-medium text-white">
+                          {liveStatusMap[o.id]?.data?.status ||
+                            liveStatusMap[o.id]?.data?.reason ||
+                            'Unknown'}
+                        </span>
+                      </div>
+                      {liveStatusMap[o.id]?.data?.awb && (
+                        <p className="mt-1 text-muted-foreground">
+                          AWB: <span className="font-mono text-white">{liveStatusMap[o.id]?.data?.awb}</span>
+                          {liveStatusMap[o.id]?.data?.courier ? ` (${liveStatusMap[o.id]?.data?.courier})` : ''}
+                        </p>
+                      )}
+                      {liveStatusMap[o.id]?.data?.trackingLink && (
+                        <a
+                          href={liveStatusMap[o.id]?.data?.trackingLink || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 inline-block text-primary-glow underline"
+                        >
+                          Track Shipment →
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  {liveStatusMap[o.id]?.error && (
+                    <p className="mt-2 text-xs text-red-400">
+                      Error: {liveStatusMap[o.id]?.error}
+                    </p>
+                  )}
 
                   
                 </div>

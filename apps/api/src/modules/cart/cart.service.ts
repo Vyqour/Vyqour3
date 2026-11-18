@@ -38,7 +38,8 @@ export class CartService {
       }
       return cart;
     }
-    if (!sessionId) throw new BadRequestException('sessionId required for guest cart');
+    if (!sessionId)
+      throw new BadRequestException('sessionId required for guest cart');
     let cart = await this.prisma.cart.findUnique({
       where: { sessionId },
       include: cartInclude,
@@ -65,18 +66,26 @@ export class CartService {
     if (!product || product.status !== 'ACTIVE') {
       throw new NotFoundException('Product not available');
     }
+    if (product.variants.length > 0 && !dto.variantId) {
+      throw new BadRequestException('Please select a valid product variant');
+    }
 
     const cart = await this.getOrCreateCart(userId, sessionId);
     const existing = cart.items.find(
-      (i) => i.productId === dto.productId && i.variantId === (dto.variantId || null),
+      (i) =>
+        i.productId === dto.productId &&
+        i.variantId === (dto.variantId || null),
     );
     const nextQuantity = (existing?.quantity || 0) + dto.quantity;
 
     if (dto.variantId) {
       const variant = product.variants.find((v) => v.id === dto.variantId);
-      if (!variant || !variant.isActive) throw new BadRequestException('Selected variant is not available');
+      if (!variant || !variant.isActive)
+        throw new BadRequestException('Selected variant is not available');
       if (variant.stock < nextQuantity) {
-        throw new BadRequestException(`Only ${variant.stock} unit(s) are available for this variant`);
+        throw new BadRequestException(
+          `Only ${variant.stock} unit(s) are available for this variant`,
+        );
       }
     }
 
@@ -98,7 +107,12 @@ export class CartService {
     return this.getCart(userId, sessionId);
   }
 
-  async updateItem(itemId: string, dto: UpdateCartItemDto, userId?: string, sessionId?: string) {
+  async updateItem(
+    itemId: string,
+    dto: UpdateCartItemDto,
+    userId?: string,
+    sessionId?: string,
+  ) {
     const cart = await this.getOrCreateCart(userId, sessionId);
     const item = cart.items.find((i) => i.id === itemId);
     if (!item) throw new NotFoundException('Cart item not found');
@@ -109,10 +123,14 @@ export class CartService {
         throw new BadRequestException('This product is no longer available');
       }
       if (item.variantId && (!item.variant || !item.variant.isActive)) {
-        throw new BadRequestException('This product variant is no longer available');
+        throw new BadRequestException(
+          'This product variant is no longer available',
+        );
       }
       if (item.variant && item.variant.stock < dto.quantity) {
-        throw new BadRequestException(`Only ${item.variant.stock} unit(s) are available for this variant`);
+        throw new BadRequestException(
+          `Only ${item.variant.stock} unit(s) are available for this variant`,
+        );
       }
       await this.prisma.cartItem.update({
         where: { id: itemId },
@@ -141,9 +159,12 @@ export class CartService {
   }
 
   async applyCoupon(code: string, userId?: string, sessionId?: string) {
-    const coupon = await this.prisma.coupon.findUnique({ where: { code: code.toUpperCase() } });
+    const coupon = await this.prisma.coupon.findUnique({
+      where: { code: code.toUpperCase() },
+    });
     const now = new Date();
-    if (!coupon || !coupon.isActive) throw new BadRequestException('Invalid coupon');
+    if (!coupon || !coupon.isActive)
+      throw new BadRequestException('Invalid coupon');
     if (coupon.expiresAt < now || coupon.startsAt > now) {
       throw new BadRequestException('Coupon is not active');
     }
@@ -155,12 +176,17 @@ export class CartService {
         where: { userId, couponCode: coupon.code },
       });
       if (priorUses >= coupon.perUserLimit) {
-        throw new BadRequestException('You have already used this coupon the maximum number of times');
+        throw new BadRequestException(
+          'You have already used this coupon the maximum number of times',
+        );
       }
     }
     const cart = await this.getOrCreateCart(userId, sessionId);
     const current = await this.withTotals(cart);
-    if (coupon.minOrderAmount && current.summary.subtotal < Number(coupon.minOrderAmount)) {
+    if (
+      coupon.minOrderAmount &&
+      current.summary.subtotal < Number(coupon.minOrderAmount)
+    ) {
       throw new BadRequestException(
         `This coupon requires a minimum order of ₹${Number(coupon.minOrderAmount).toFixed(0)}`,
       );
@@ -180,9 +206,37 @@ export class CartService {
     if (!guest?.items.length) return this.getCart(userId);
     const userCart = await this.getOrCreateCart(userId);
     for (const item of guest.items) {
+      const product = await this.prisma.product.findUnique({
+        where: { id: item.productId },
+        include: { variants: true },
+      });
+      if (!product || product.status !== 'ACTIVE') {
+        throw new BadRequestException(
+          'A guest-cart product is no longer available',
+        );
+      }
+      if (product.variants.length > 0 && !item.variantId) {
+        throw new BadRequestException(
+          'A guest-cart item is missing its variant',
+        );
+      }
       const existing = userCart.items.find(
         (i) => i.productId === item.productId && i.variantId === item.variantId,
       );
+      if (item.variantId) {
+        const variant = product.variants.find((v) => v.id === item.variantId);
+        if (!variant || !variant.isActive) {
+          throw new BadRequestException(
+            'A guest-cart item variant is no longer available',
+          );
+        }
+        const needed = (existing?.quantity || 0) + item.quantity;
+        if (variant.stock < needed) {
+          throw new BadRequestException(
+            `Only ${variant.stock} unit(s) are available for this variant`,
+          );
+        }
+      }
       if (existing) {
         await this.prisma.cartItem.update({
           where: { id: existing.id },
@@ -204,7 +258,9 @@ export class CartService {
     return this.getCart(userId);
   }
 
-  private async withTotals(cart: Awaited<ReturnType<typeof this.getOrCreateCart>>) {
+  private async withTotals(
+    cart: Awaited<ReturnType<typeof this.getOrCreateCart>>,
+  ) {
     let subtotal = 0;
     const items = cart.items.map((item) => {
       const unit =
@@ -217,9 +273,13 @@ export class CartService {
     });
 
     let discountAmount = 0;
-    let coupon = null as Awaited<ReturnType<typeof this.prisma.coupon.findUnique>> | null;
+    let coupon = null as Awaited<
+      ReturnType<typeof this.prisma.coupon.findUnique>
+    > | null;
     if (cart.couponCode) {
-      const candidate = await this.prisma.coupon.findUnique({ where: { code: cart.couponCode } });
+      const candidate = await this.prisma.coupon.findUnique({
+        where: { code: cart.couponCode },
+      });
       const now = new Date();
       let withinPerUserLimit = true;
       if (candidate && cart.userId && candidate.perUserLimit > 0) {
@@ -230,19 +290,24 @@ export class CartService {
       }
       const eligible = Boolean(
         candidate &&
-          candidate.isActive &&
-          candidate.startsAt <= now &&
-          candidate.expiresAt >= now &&
-          (candidate.usageLimit == null || candidate.usageCount < candidate.usageLimit) &&
-          withinPerUserLimit &&
-          (!candidate.minOrderAmount || subtotal >= Number(candidate.minOrderAmount)),
+        candidate.isActive &&
+        candidate.startsAt <= now &&
+        candidate.expiresAt >= now &&
+        (candidate.usageLimit == null ||
+          candidate.usageCount < candidate.usageLimit) &&
+        withinPerUserLimit &&
+        (!candidate.minOrderAmount ||
+          subtotal >= Number(candidate.minOrderAmount)),
       );
       if (eligible && candidate) {
         coupon = candidate;
         if (coupon.type === 'PERCENTAGE') {
           discountAmount = (subtotal * Number(coupon.value)) / 100;
           if (coupon.maxDiscount != null) {
-            discountAmount = Math.min(discountAmount, Number(coupon.maxDiscount));
+            discountAmount = Math.min(
+              discountAmount,
+              Number(coupon.maxDiscount),
+            );
           }
         } else if (coupon.type === 'FIXED') {
           discountAmount = Math.min(Number(coupon.value), subtotal);
@@ -251,9 +316,15 @@ export class CartService {
     }
 
     const shippingAmount =
-      subtotal - discountAmount >= 1999 || coupon?.type === 'FREE_SHIPPING' ? 0 : 99;
-    const taxAmount = Math.round((subtotal - discountAmount) * 0.05 * 100) / 100; // 5% GST simplified
-    const total = Math.max(0, subtotal - discountAmount + shippingAmount + taxAmount);
+      subtotal - discountAmount >= 1999 || coupon?.type === 'FREE_SHIPPING'
+        ? 0
+        : 99;
+    const taxAmount =
+      Math.round((subtotal - discountAmount) * 0.05 * 100) / 100; // 5% GST simplified
+    const total = Math.max(
+      0,
+      subtotal - discountAmount + shippingAmount + taxAmount,
+    );
 
     return {
       ...cart,

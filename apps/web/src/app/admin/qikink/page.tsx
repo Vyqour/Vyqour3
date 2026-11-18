@@ -33,12 +33,27 @@ type Log = {
   createdAt: string;
 };
 
+type LiveStatusDiagnostic = {
+  success: boolean;
+  source?: string;
+  orderNumber?: string;
+  qikinkOrderId?: string;
+  status?: string | null;
+  awb?: string | null;
+  courier?: string | null;
+  trackingLink?: string | null;
+  reason?: string;
+  message?: string;
+};
+
 export default function AdminQikinkPage() {
   const [health, setHealth] = useState<{ enabled: boolean; autoSubmit: boolean } | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
   const [loading, setLoading] = useState(true);
   const [orderId, setOrderId] = useState('');
+  const [diagResult, setDiagResult] = useState<LiveStatusDiagnostic | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -130,7 +145,89 @@ export default function AdminQikinkPage() {
           >
             Retry failed
           </Button>
+          <Button
+            variant="outline"
+            disabled={!orderId || diagLoading}
+            onClick={async () => {
+              setDiagLoading(true);
+              setDiagResult(null);
+              try {
+                const res = await fetch(
+                  `/api/admin/qikink/orders/${encodeURIComponent(orderId.trim())}/live-status`,
+                );
+                const data = await res.json();
+                setDiagResult(data);
+                if (data.success) {
+                  toast.success('Live status retrieved from Qikink');
+                } else {
+                  toast.error(data.message || data.reason || 'Live status lookup failed');
+                }
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : 'Diagnostic request failed');
+              } finally {
+                setDiagLoading(false);
+              }
+            }}
+          >
+            {diagLoading ? 'Checking...' : 'Check live status (Read-Only)'}
+          </Button>
         </div>
+
+        {diagResult && (
+          <div className="mt-4 rounded-xl border border-white/10 bg-black/40 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-primary-glow">
+                Qikink Live Diagnostic Result (Read-Only)
+              </span>
+              <Badge variant={diagResult.success ? 'success' : 'sale'}>
+                {diagResult.success ? 'Live API Success' : 'Lookup Incomplete'}
+              </Badge>
+            </div>
+            <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+              <div>
+                <span className="text-muted-foreground">Order Number: </span>
+                <span className="font-mono text-white">{diagResult.orderNumber || '—'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Qikink Order ID: </span>
+                <span className="font-mono text-white">{diagResult.qikinkOrderId || '—'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Fulfillment Status: </span>
+                <span className="font-medium text-white">{diagResult.status || diagResult.reason || '—'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Courier: </span>
+                <span className="text-white">{diagResult.courier || '—'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">AWB: </span>
+                <span className="font-mono text-white">{diagResult.awb || '—'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Tracking Link: </span>
+                {diagResult.trackingLink ? (
+                  <a
+                    href={diagResult.trackingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary-glow underline"
+                  >
+                    View Tracking
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </div>
+            </div>
+            {diagResult.reason && (
+              <p className="mt-2 text-xs text-amber-300">
+                Notice: {diagResult.reason}
+              </p>
+            )}
+          </div>
+        )}
+
         <p className="mt-4 text-xs text-muted-foreground">
           Webhook URL: <code className="text-primary-glow">POST /api/v1/qikink/webhooks</code>
           {' · '}

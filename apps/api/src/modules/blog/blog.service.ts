@@ -14,7 +14,9 @@ export class BlogService {
       this.prisma.blogPost.findMany({
         where,
         include: {
-          author: { select: { firstName: true, lastName: true, avatarUrl: true } },
+          author: {
+            select: { firstName: true, lastName: true, avatarUrl: true },
+          },
         },
         orderBy: { publishedAt: 'desc' },
         skip,
@@ -29,10 +31,13 @@ export class BlogService {
     const post = await this.prisma.blogPost.findUnique({
       where: { slug },
       include: {
-        author: { select: { firstName: true, lastName: true, avatarUrl: true } },
+        author: {
+          select: { firstName: true, lastName: true, avatarUrl: true },
+        },
       },
     });
-    if (!post || !post.isPublished) throw new NotFoundException('Post not found');
+    if (!post || !post.isPublished)
+      throw new NotFoundException('Post not found');
     await this.prisma.blogPost.update({
       where: { id: post.id },
       data: { viewCount: { increment: 1 } },

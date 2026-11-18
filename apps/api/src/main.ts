@@ -22,13 +22,18 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   const logger = new Logger('Bootstrap');
 
-  const prefix = (config.get<string>('apiPrefix') || 'api/v1').replace(/^\/+|\/+$/g, '');
+  const prefix = (config.get<string>('apiPrefix') || 'api/v1').replace(
+    /^\/+|\/+$/g,
+    '',
+  );
   // Global prefix must NOT swallow OPTIONS preflight — Nest handles OPTIONS via CORS middleware.
   app.setGlobalPrefix(prefix, {
     exclude: [],
   });
 
-  const corsOrigins = config.get<string[]>('corsOrigins') || ['http://localhost:3000'];
+  const corsOrigins = config.get<string[]>('corsOrigins') || [
+    'http://localhost:3000',
+  ];
   const originDelegate = createCorsOriginDelegate(corsOrigins);
 
   // 1) CORS first so preflight always gets headers even if later middleware errors.
@@ -85,27 +90,33 @@ async function bootstrap() {
   const isWebhook = (req: Request) =>
     req.originalUrl?.includes('/webhooks/') || req.url?.includes('/webhooks/');
 
-  app.use((req: Request & { rawBody?: Buffer }, res: Response, next: NextFunction) => {
-    // OPTIONS never has a body — skip parsers entirely
-    if (req.method === 'OPTIONS') return next();
+  app.use(
+    (
+      req: Request & { rawBody?: Buffer },
+      res: Response,
+      next: NextFunction,
+    ) => {
+      // OPTIONS never has a body — skip parsers entirely
+      if (req.method === 'OPTIONS') return next();
 
-    if (isWebhook(req)) {
-      return raw({ type: '*/*', limit: '2mb' })(req, res, (err) => {
-        if (err) return next(err);
-        if (Buffer.isBuffer(req.body)) {
-          req.rawBody = req.body;
-          try {
-            const text = req.body.toString('utf8');
-            req.body = text ? JSON.parse(text) : {};
-          } catch {
-            req.body = {};
+      if (isWebhook(req)) {
+        return raw({ type: '*/*', limit: '2mb' })(req, res, (err) => {
+          if (err) return next(err);
+          if (Buffer.isBuffer(req.body)) {
+            req.rawBody = req.body;
+            try {
+              const text = req.body.toString('utf8');
+              req.body = text ? JSON.parse(text) : {};
+            } catch {
+              req.body = {};
+            }
           }
-        }
-        return next();
-      });
-    }
-    return json({ limit: '2mb' })(req, res, next);
-  });
+          return next();
+        });
+      }
+      return json({ limit: '2mb' })(req, res, next);
+    },
+  );
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -118,7 +129,9 @@ async function bootstrap() {
 
   const swagger = new DocumentBuilder()
     .setTitle('VYQOUR API')
-    .setDescription('Premium Print-on-Demand Fashion Store API · Qikink + Razorpay')
+    .setDescription(
+      'Premium Print-on-Demand Fashion Store API · Qikink + Razorpay',
+    )
     .setVersion('1.1')
     .addBearerAuth()
     .addCookieAuth('access_token')
@@ -131,7 +144,9 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
   logger.log(`VYQOUR API running on http://0.0.0.0:${port}/${prefix}`);
   logger.log(`Swagger docs: http://localhost:${port}/${prefix}/docs`);
-  logger.log(`CORS allowlist (+ localhost/Codespaces dynamic): ${corsOrigins.join(', ')}`);
+  logger.log(
+    `CORS allowlist (+ localhost/Codespaces dynamic): ${corsOrigins.join(', ')}`,
+  );
   logger.log(
     `Qikink enabled=${config.get('qikink.enabled')} sandbox=${config.get('qikink.sandbox')}`,
   );

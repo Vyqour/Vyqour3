@@ -26,7 +26,10 @@ import {
   ResetPasswordDto,
   VerifyEmailDto,
 } from './dto/auth.dto';
-import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
+import {
+  CurrentUser,
+  AuthUser,
+} from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { Throttle } from '@nestjs/throttler';
 
@@ -165,7 +168,8 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const token = dto.refreshToken || (req.cookies?.refresh_token as string | undefined);
+    const token =
+      dto.refreshToken || (req.cookies?.refresh_token as string | undefined);
     if (!token) {
       throw new UnauthorizedException('Refresh token is missing or expired');
     }
@@ -182,7 +186,8 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const token = dto.refreshToken || (req.cookies?.refresh_token as string | undefined);
+    const token =
+      dto.refreshToken || (req.cookies?.refresh_token as string | undefined);
     clearAuthCookies(req, res);
     return this.auth.logout(token);
   }
@@ -226,7 +231,10 @@ export class AuthController {
   @Post('change-password')
   @HttpCode(200)
   @ApiBearerAuth()
-  async changePassword(@CurrentUser() user: AuthUser, @Body() dto: ChangePasswordDto) {
+  async changePassword(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: ChangePasswordDto,
+  ) {
     return this.auth.changePassword(user.id, dto);
   }
 

@@ -31,7 +31,9 @@ export class RedisService implements OnModuleDestroy {
           this.logger.log('Redis connected');
         })
         .catch((err: Error) => {
-          this.logger.warn(`Redis unavailable: ${err.message} — caching disabled`);
+          this.logger.warn(
+            `Redis unavailable: ${err.message} — caching disabled`,
+          );
           this.enabled = false;
         });
     } catch (err) {

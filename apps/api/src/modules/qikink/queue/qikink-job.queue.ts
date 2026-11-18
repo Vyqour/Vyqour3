@@ -39,7 +39,8 @@ export class QikinkJobQueue {
     const runInTx = async (tx: Prisma.TransactionClient) => {
       if (
         opts.orderId &&
-        (type === QikinkJobType.SUBMIT_ORDER || type === QikinkJobType.SYNC_ORDER_STATUS)
+        (type === QikinkJobType.SUBMIT_ORDER ||
+          type === QikinkJobType.SYNC_ORDER_STATUS)
       ) {
         // Serialize active per-order submission and status-sync enqueue calls.
         // This prevents the 30-minute poller and webhook from creating duplicate
@@ -54,7 +55,9 @@ export class QikinkJobQueue {
           where: {
             orderId: opts.orderId,
             type,
-            status: { in: [QikinkJobStatus.PENDING, QikinkJobStatus.PROCESSING] },
+            status: {
+              in: [QikinkJobStatus.PENDING, QikinkJobStatus.PROCESSING],
+            },
           },
         });
         if (existing) return existing;
@@ -95,7 +98,11 @@ export class QikinkJobQueue {
             status: QikinkJobStatus.PROCESSING,
             lockedAt: { lt: lockCutoff },
           },
-          data: { status: QikinkJobStatus.PENDING, lockedAt: null, lockedBy: null },
+          data: {
+            status: QikinkJobStatus.PENDING,
+            lockedAt: null,
+            lockedBy: null,
+          },
         });
         if (reclaimed.count) {
           this.logger.warn(
@@ -175,7 +182,10 @@ export class QikinkJobQueue {
     maxAttempts: number,
     isPermanent = false,
   ) {
-    const delayMs = Math.min(60 * 60 * 1000, 2 ** Math.min(attempts, 8) * 15_000);
+    const delayMs = Math.min(
+      60 * 60 * 1000,
+      2 ** Math.min(attempts, 8) * 15_000,
+    );
     const dead = isPermanent || attempts >= maxAttempts;
     // Same ownership guard as complete(): a stale worker's failure report must
     // not reset a job another worker currently owns.
@@ -204,7 +214,11 @@ export class QikinkJobQueue {
 
   async requeueDead(orderId: string) {
     return this.prisma.qikinkJob.updateMany({
-      where: { orderId, status: QikinkJobStatus.DEAD, type: QikinkJobType.SUBMIT_ORDER },
+      where: {
+        orderId,
+        status: QikinkJobStatus.DEAD,
+        type: QikinkJobType.SUBMIT_ORDER,
+      },
       data: {
         status: QikinkJobStatus.PENDING,
         runAfter: new Date(),

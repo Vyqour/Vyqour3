@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -21,8 +25,11 @@ export class WishlistService {
   }
 
   async add(userId: string, productId: string) {
-    const product = await this.prisma.product.findUnique({ where: { id: productId } });
-    if (!product || product.status !== 'ACTIVE') throw new NotFoundException('Product not found');
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
+    if (!product || product.status !== 'ACTIVE')
+      throw new NotFoundException('Product not found');
     try {
       return await this.prisma.wishlistItem.create({
         data: { userId, productId },

@@ -14,7 +14,10 @@ import { PrismaClient } from '@prisma/client';
  * - Optional: set DIRECT_URL to the non-pooler host for migrations only.
  */
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   private readonly logger = new Logger(PrismaService.name);
   private connecting: Promise<void> | null = null;
 
@@ -27,7 +30,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       },
       log:
         process.env.NODE_ENV === 'development'
-          ? [{ emit: 'stdout', level: 'error' }, { emit: 'stdout', level: 'warn' }]
+          ? [
+              { emit: 'stdout', level: 'error' },
+              { emit: 'stdout', level: 'warn' },
+            ]
           : ['error'],
       errorFormat: 'pretty',
     });
@@ -172,13 +178,13 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       throw new Error('cleanDatabase is not allowed in production');
     }
     const models = Reflect.ownKeys(this).filter(
-      (key) => typeof key === 'string' && !key.startsWith('_') && !key.startsWith('$'),
+      (key) =>
+        typeof key === 'string' && !key.startsWith('_') && !key.startsWith('$'),
     );
     return Promise.all(
       models.map((modelKey) => {
         const model = (this as Record<string, unknown>)[modelKey as string] as
-          | { deleteMany?: () => Promise<unknown> }
-          | undefined;
+          { deleteMany?: () => Promise<unknown> } | undefined;
         return model?.deleteMany?.();
       }),
     );

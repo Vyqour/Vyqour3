@@ -36,30 +36,37 @@ describe('QikinkApiClient', () => {
   });
 
   it('treats an HTTP 200 application-level error as a failed request', async () => {
-    global.fetch = jest.fn()
+    global.fetch = jest
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        text: async () => JSON.stringify({ Accesstoken: 'token', expires_in: 3600 }),
+        text: async () =>
+          JSON.stringify({ Accesstoken: 'token', expires_in: 3600 }),
       } as unknown as Response)
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        text: async () => JSON.stringify({ status_code: 400, message: 'Invalid SKU' }),
+        text: async () =>
+          JSON.stringify({ status_code: 400, message: 'Invalid SKU' }),
       } as unknown as Response);
 
-    await expect(client.createOrder({
-      order_number: 'VYQ123456',
-      qikink_shipping: '1',
-      gateway: 'Prepaid',
-      total_order_value: '500',
-      line_items: [{
-        search_from_my_products: 1,
-        quantity: '1',
-        price: '500',
-        sku: 'INVALID-SKU',
-      }],
-    })).rejects.toThrow('Invalid SKU');
+    await expect(
+      client.createOrder({
+        order_number: 'VYQ123456',
+        qikink_shipping: '1',
+        gateway: 'Prepaid',
+        total_order_value: '500',
+        line_items: [
+          {
+            search_from_my_products: 1,
+            quantity: '1',
+            price: '500',
+            sku: 'INVALID-SKU',
+          },
+        ],
+      }),
+    ).rejects.toThrow('Invalid SKU');
 
     expect(mockPrisma.qikinkApiLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -72,64 +79,79 @@ describe('QikinkApiClient', () => {
   });
 
   it('uses the documented order list endpoint and normalizes shipping tracking fields', async () => {
-    global.fetch = jest.fn()
+    global.fetch = jest
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        text: async () => JSON.stringify({ Accesstoken: 'token', expires_in: 3600 }),
+        text: async () =>
+          JSON.stringify({ Accesstoken: 'token', expires_in: 3600 }),
       } as unknown as Response)
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        text: async () => JSON.stringify({
-          success: true,
-          data: [{
-            order_id: 123,
-            number: '1_VYQ123456',
-            status: 'In-Transit',
-            shipping: {
-              awb: '77908747221',
-              tracking_link: 'https://tracking.example/77908747221',
-              courier_provider_name: 'Bluedart Surface',
-            },
-          }],
-        }),
+        text: async () =>
+          JSON.stringify({
+            success: true,
+            data: [
+              {
+                order_id: 123,
+                number: '1_VYQ123456',
+                status: 'In-Transit',
+                shipping: {
+                  awb: '77908747221',
+                  tracking_link: 'https://tracking.example/77908747221',
+                  courier_provider_name: 'Bluedart Surface',
+                },
+              },
+            ],
+          }),
       } as unknown as Response);
 
-    const result = await client.getOrderStatus({ orderId: 123, internalOrderId: 'internal-1' });
+    const result = await client.getOrderStatus({
+      orderId: 123,
+      internalOrderId: 'internal-1',
+    });
     expect(global.fetch).toHaveBeenLastCalledWith(
       expect.stringContaining('/api/order/list?id=123'),
       expect.any(Object),
     );
-    expect(result).toEqual(expect.objectContaining({
-      order_id: 123,
-      status: 'In-Transit',
-      awb: '77908747221',
-      tracking_number: '77908747221',
-      tracking_link: 'https://tracking.example/77908747221',
-      courier: 'Bluedart Surface',
-    }));
+    expect(result).toEqual(
+      expect.objectContaining({
+        order_id: 123,
+        status: 'In-Transit',
+        awb: '77908747221',
+        tracking_number: '77908747221',
+        tracking_link: 'https://tracking.example/77908747221',
+        courier: 'Bluedart Surface',
+      }),
+    );
   });
 
   it('does not return an unrelated first row when the requested Qikink order ID is absent', async () => {
-    global.fetch = jest.fn()
+    global.fetch = jest
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        text: async () => JSON.stringify({ Accesstoken: 'token', expires_in: 3600 }),
+        text: async () =>
+          JSON.stringify({ Accesstoken: 'token', expires_in: 3600 }),
       } as unknown as Response)
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        text: async () => JSON.stringify({
-          success: true,
-          data: [{
-            order_id: 999,
-            number: 'OTHER-ORDER',
-            status: 'Delivered',
-            shipping: { awb: 'WRONG-AWB' },
-          }],
-        }),
+        text: async () =>
+          JSON.stringify({
+            success: true,
+            data: [
+              {
+                order_id: 999,
+                number: 'OTHER-ORDER',
+                status: 'Delivered',
+                shipping: { awb: 'WRONG-AWB' },
+              },
+            ],
+          }),
       } as unknown as Response);
 
     const result = await client.getOrderStatus({ orderId: 123 });
@@ -137,11 +159,13 @@ describe('QikinkApiClient', () => {
   });
 
   it('redacts customer contact and shipping details from stored API logs', async () => {
-    global.fetch = jest.fn()
+    global.fetch = jest
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        text: async () => JSON.stringify({ Accesstoken: 'token', expires_in: 3600 }),
+        text: async () =>
+          JSON.stringify({ Accesstoken: 'token', expires_in: 3600 }),
       } as unknown as Response)
       .mockResolvedValueOnce({
         ok: true,
@@ -154,12 +178,14 @@ describe('QikinkApiClient', () => {
       qikink_shipping: '1',
       gateway: 'Prepaid',
       total_order_value: '500',
-      line_items: [{
-        search_from_my_products: 1,
-        quantity: '1',
-        price: '500',
-        sku: 'TS-BK-M',
-      }],
+      line_items: [
+        {
+          search_from_my_products: 1,
+          quantity: '1',
+          price: '500',
+          sku: 'TS-BK-M',
+        },
+      ],
       shipping_address: {
         first_name: 'Test',
         last_name: 'Customer',
@@ -180,30 +206,42 @@ describe('QikinkApiClient', () => {
   });
 
   it('can perform a live status lookup without writing token or API logs to Neon', async () => {
-    global.fetch = jest.fn()
+    global.fetch = jest
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        text: async () => JSON.stringify({ Accesstoken: 'token', expires_in: 3600 }),
+        text: async () =>
+          JSON.stringify({ Accesstoken: 'token', expires_in: 3600 }),
       } as unknown as Response)
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        text: async () => JSON.stringify({
-          success: true,
-          data: [{
-            order_id: 123,
-            number: '1_VYQ123456',
-            status: 'In-Transit',
-            shipping: { awb: '77908747221', courier_provider_name: 'Bluedart' },
-          }],
-        }),
+        text: async () =>
+          JSON.stringify({
+            success: true,
+            data: [
+              {
+                order_id: 123,
+                number: '1_VYQ123456',
+                status: 'In-Transit',
+                shipping: {
+                  awb: '77908747221',
+                  courier_provider_name: 'Bluedart',
+                },
+              },
+            ],
+          }),
       } as unknown as Response);
 
-    const result = await client.getOrderStatus({ orderId: 123, logToDatabase: false });
+    const result = await client.getOrderStatus({
+      orderId: 123,
+      logToDatabase: false,
+    });
 
-    expect(result).toEqual(expect.objectContaining({ order_id: 123, status: 'In-Transit' }));
+    expect(result).toEqual(
+      expect.objectContaining({ order_id: 123, status: 'In-Transit' }),
+    );
     expect(mockPrisma.qikinkApiLog.create).not.toHaveBeenCalled();
   });
-
 });

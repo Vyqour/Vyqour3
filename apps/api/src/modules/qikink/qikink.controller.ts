@@ -8,7 +8,12 @@ import {
   Post,
   Req as NestReq,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiExcludeEndpoint,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Prisma, Role } from '@prisma/client';
 import { Request } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
@@ -81,7 +86,9 @@ export class QikinkController {
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.SUPER_ADMIN, Role.SUPPORT)
   async syncStatus(@Param('orderId') orderId: string) {
-    const job = await this.queue.enqueue(QikinkJobType.SYNC_ORDER_STATUS, { orderId });
+    const job = await this.queue.enqueue(QikinkJobType.SYNC_ORDER_STATUS, {
+      orderId,
+    });
     return { queued: true, jobId: job.id };
   }
 
@@ -138,7 +145,10 @@ export class QikinkController {
   @Patch('products/:productId/mapping')
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  mapProduct(@Param('productId') productId: string, @Body() dto: MapQikinkSkuDto) {
+  mapProduct(
+    @Param('productId') productId: string,
+    @Body() dto: MapQikinkSkuDto,
+  ) {
     return this.prisma.product.update({
       where: { id: productId },
       data: {

@@ -7,9 +7,14 @@ import type { NextConfig } from 'next';
  * Codespaces: set INTERNAL_API_URL=http://127.0.0.1:4000 (default)
  * so the rewrite never depends on the public -4000 tunnel.
  */
+const publicApiOrigin = process.env.NEXT_PUBLIC_API_URL
+  ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/v1\/?$/, '').replace(/\/+$/, '')
+  : '';
+
 const internalApiOrigin = (
   process.env.INTERNAL_API_URL ||
   process.env.API_PROXY_TARGET ||
+  publicApiOrigin ||
   'http://127.0.0.1:4000'
 ).replace(/\/+$/, '');
 
