@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
@@ -60,7 +64,8 @@ export class CollectionsService {
         },
       },
     });
-    if (!collection || !collection.isActive) throw new NotFoundException('Collection not found');
+    if (!collection || !collection.isActive)
+      throw new NotFoundException('Collection not found');
     return collection;
   }
 
@@ -111,10 +116,12 @@ export class CollectionsService {
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.imageUrl !== undefined) data.imageUrl = dto.imageUrl;
     if (dto.bannerUrl !== undefined) data.bannerUrl = dto.bannerUrl;
-    if (dto.featuredImageUrl !== undefined) data.featuredImageUrl = dto.featuredImageUrl;
+    if (dto.featuredImageUrl !== undefined)
+      data.featuredImageUrl = dto.featuredImageUrl;
     if (dto.sortOrder !== undefined) data.sortOrder = dto.sortOrder;
     if (dto.seoTitle !== undefined) data.seoTitle = dto.seoTitle;
-    if (dto.seoDescription !== undefined) data.seoDescription = dto.seoDescription;
+    if (dto.seoDescription !== undefined)
+      data.seoDescription = dto.seoDescription;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.isFeatured !== undefined) data.isFeatured = dto.isFeatured;
 
@@ -178,7 +185,10 @@ export class CollectionsService {
 
   async remove(id: string) {
     await this.ensureExists(id);
-    await this.prisma.collection.update({ where: { id }, data: { isActive: false } });
+    await this.prisma.collection.update({
+      where: { id },
+      data: { isActive: false },
+    });
     await this.bust();
     return { message: 'Collection archived' };
   }

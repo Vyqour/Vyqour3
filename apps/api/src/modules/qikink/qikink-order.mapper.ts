@@ -29,13 +29,20 @@ type OrderForQikink = Order & {
  * Our internal VYQ... numbers can be longer — compress safely.
  */
 export function toQikinkOrderNumber(order: Order): string {
-  const existing = (order.qikinkOrderNumber || '').replace(/[^a-zA-Z0-9_]/g, '');
+  const existing = (order.qikinkOrderNumber || '').replace(
+    /[^a-zA-Z0-9_]/g,
+    '',
+  );
   if (existing && existing.length <= 15) return existing;
 
   // Keep the provider's 15-character alphanumeric limit while retaining a
   // deterministic suffix derived from the internal order id to reduce collisions.
   const raw = (order.orderNumber || order.id).replace(/[^a-zA-Z0-9]/g, '');
-  const suffix = createHash('sha256').update(order.id).digest('hex').slice(0, 4).toUpperCase();
+  const suffix = createHash('sha256')
+    .update(order.id)
+    .digest('hex')
+    .slice(0, 4)
+    .toUpperCase();
   return `V${raw.slice(-10)}${suffix}`.slice(0, 15);
 }
 
@@ -153,8 +160,14 @@ export function mapOrderToQikinkPayload(
 
         return {
           design_code: designCode,
-          width_inches: d.widthInches != null && Number(d.widthInches) > 0 ? String(d.widthInches) : '',
-          height_inches: d.heightInches != null && Number(d.heightInches) > 0 ? String(d.heightInches) : '',
+          width_inches:
+            d.widthInches != null && Number(d.widthInches) > 0
+              ? String(d.widthInches)
+              : '',
+          height_inches:
+            d.heightInches != null && Number(d.heightInches) > 0
+              ? String(d.heightInches)
+              : '',
           placement_sku: placementSku,
           design_link: d.designUrl!.trim(),
           mockup_link: (d.mockupUrl || d.designUrl!).trim(),
@@ -165,7 +178,9 @@ export function mapOrderToQikinkPayload(
   });
 
   const addr = order.shippingAddress;
-  const nameParts = (addr.fullName || order.user.firstName || 'Customer').trim().split(/\s+/);
+  const nameParts = (addr.fullName || order.user.firstName || 'Customer')
+    .trim()
+    .split(/\s+/);
   const first = nameParts[0] || 'Customer';
   const last = nameParts.slice(1).join(' ') || order.user.lastName || '';
 
@@ -181,7 +196,10 @@ export function mapOrderToQikinkPayload(
     const addressLine1 = (addr.line1 || '').trim();
     const address1 = addressLine1.slice(0, 90);
     const overflow = addressLine1.slice(90).trim();
-    const address2 = [overflow, addr.line2?.trim()].filter(Boolean).join(' ').slice(0, 180);
+    const address2 = [overflow, addr.line2?.trim()]
+      .filter(Boolean)
+      .join(' ')
+      .slice(0, 180);
     payload.shipping_address = {
       first_name: first,
       last_name: last,
@@ -204,19 +222,35 @@ export function mapOrderToQikinkPayload(
 /** Map free-text Qikink status into our OrderStatus enum values */
 export function mapQikinkStatusToOrderStatus(
   raw?: string | null,
-): 'PROCESSING' | 'SHIPPED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED' | 'RETURNED' | 'CONFIRMED' | null {
+):
+  | 'PROCESSING'
+  | 'SHIPPED'
+  | 'OUT_FOR_DELIVERY'
+  | 'DELIVERED'
+  | 'CANCELLED'
+  | 'RETURNED'
+  | 'CONFIRMED'
+  | null {
   if (!raw) return null;
-  const s = raw.toLowerCase().replace(/[_\s-]+/g, ' ').trim();
+  const s = raw
+    .toLowerCase()
+    .replace(/[_\s-]+/g, ' ')
+    .trim();
   if (/(hold|on hold)/.test(s)) return null;
   if (/(cancel|cancelled|canceled|rejected)/.test(s)) return 'CANCELLED';
   if (/^returned$/.test(s)) return 'RETURNED';
-  if (/(out for delivery|delivery rescheduled|ofd)/.test(s)) return 'OUT_FOR_DELIVERY';
+  if (/(out for delivery|delivery rescheduled|ofd)/.test(s))
+    return 'OUT_FOR_DELIVERY';
   if (/^delivered$/.test(s)) return 'DELIVERED';
   if (/(in transit|shipped|picked up)/.test(s)) return 'SHIPPED';
   if (/dispatch ready/.test(s)) return 'PROCESSING';
   // Qikink's Live, Live OOS, To be Printed, Partially Picklisted,
   // Printed and Manifested states are pre-delivery fulfilment states.
-  if (/(live|to be printed|picklist|printed|manifested|process|produc|confirm|accepted|new)/.test(s)) {
+  if (
+    /(live|to be printed|picklist|printed|manifested|process|produc|confirm|accepted|new)/.test(
+      s,
+    )
+  ) {
     return 'PROCESSING';
   }
   return null;

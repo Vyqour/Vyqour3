@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { createHmac } from 'crypto';
 import {
   PaymentMethod,
   PaymentStatus,
@@ -170,7 +170,12 @@ describe('QikinkService - Order Submission Hardening', () => {
           return activeJobInDb;
         }),
         create: jest.fn().mockImplementation(async () => {
-          activeJobInDb = { id: 'job_active_123', type: QikinkJobType.SUBMIT_ORDER, orderId: 'order_1', status: QikinkJobStatus.PENDING };
+          activeJobInDb = {
+            id: 'job_active_123',
+            type: QikinkJobType.SUBMIT_ORDER,
+            orderId: 'order_1',
+            status: QikinkJobStatus.PENDING,
+          };
           return activeJobInDb;
         }),
       },
@@ -282,7 +287,9 @@ describe('QikinkService - Order Submission Hardening', () => {
     mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
     mockClient.createOrder.mockRejectedValue(new Error('Network timeout'));
 
-    await expect(service.processSubmitJob('order_1')).rejects.toThrow('Network timeout');
+    await expect(service.processSubmitJob('order_1')).rejects.toThrow(
+      'Network timeout',
+    );
 
     expect(mockPrisma.order.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -386,7 +393,10 @@ describe('QikinkService - Order Submission Hardening', () => {
       mockPrisma.order.update.mockClear();
       mockQueue.enqueue.mockClear();
 
-      const res = await service.enqueueOrderSubmission('order_1', 'payment_callback');
+      const res = await service.enqueueOrderSubmission(
+        'order_1',
+        'payment_callback',
+      );
 
       expect(res).toEqual({ queued: false, reason: 'order_terminal', status });
       // No qikinkSyncStatus overwrite on a terminal order, no queue job
@@ -404,8 +414,6 @@ describe('QikinkService - Order Submission Hardening', () => {
       };
       mockPrisma.order.findFirst = jest.fn();
     });
-
-
 
     it('live diagnostic reads provider status without mutating orders, jobs, histories, audits, or API logs', async () => {
       mockPrisma.order.findUnique.mockResolvedValue({
@@ -466,7 +474,11 @@ describe('QikinkService - Order Submission Hardening', () => {
 
       const res = await service.processStatusSync('order_1');
 
-      expect(res).toEqual({ orderId: 'order_1', mapped: 'SHIPPED', status: 'shipped' });
+      expect(res).toEqual({
+        orderId: 'order_1',
+        mapped: 'SHIPPED',
+        status: 'shipped',
+      });
       expect(mockPrisma.order.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'order_1' },
@@ -496,7 +508,11 @@ describe('QikinkService - Order Submission Hardening', () => {
 
       const res = await service.processStatusSync('order_1');
 
-      expect(res).toEqual({ orderId: 'order_1', mapped: null, status: 'some_unknown_vendor_status_xyz' });
+      expect(res).toEqual({
+        orderId: 'order_1',
+        mapped: null,
+        status: 'some_unknown_vendor_status_xyz',
+      });
       // Order status should not change
       expect(mockPrisma.order.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -531,7 +547,11 @@ describe('QikinkService - Order Submission Hardening', () => {
         source: 'poll',
       });
 
-      expect(res).toEqual({ orderId: 'order_1', mapped: 'SHIPPED', status: 'shipped' });
+      expect(res).toEqual({
+        orderId: 'order_1',
+        mapped: 'SHIPPED',
+        status: 'shipped',
+      });
       // Since mapped === order.status, statusHistory is NOT created
       expect(mockPrisma.orderStatusHistory.create).not.toHaveBeenCalled();
       expect(mockClient.createOrder).not.toHaveBeenCalled();
@@ -550,7 +570,11 @@ describe('QikinkService - Order Submission Hardening', () => {
         source: 'poll',
       });
 
-      expect(res).toEqual({ orderId: 'order_1', mapped: 'PROCESSING', status: 'processing' });
+      expect(res).toEqual({
+        orderId: 'order_1',
+        mapped: 'PROCESSING',
+        status: 'processing',
+      });
       // data.status should NOT be in update since rank(PROCESSING) < rank(SHIPPED)
       const updateData = mockPrisma.order.update.mock.calls[0][0].data;
       expect(updateData.status).toBeUndefined();
@@ -604,7 +628,11 @@ describe('QikinkService - Order Submission Hardening', () => {
         processed: true,
       });
 
-      const res = await service.handleWebhook({}, Buffer.from('{"id":"evt_dup"}'), { id: 'evt_dup' });
+      const res = await service.handleWebhook(
+        {},
+        Buffer.from('{"id":"evt_dup"}'),
+        { id: 'evt_dup' },
+      );
 
       expect(res).toEqual({ ok: true, duplicate: true });
       expect(mockPrisma.order.update).not.toHaveBeenCalled();
@@ -617,7 +645,9 @@ describe('QikinkService - Order Submission Hardening', () => {
         return null;
       });
       mockPrisma.qikinkWebhookEvent.findUnique.mockResolvedValue(null);
-      mockPrisma.qikinkWebhookEvent.upsert.mockResolvedValue({ id: 'evt_unknown' });
+      mockPrisma.qikinkWebhookEvent.upsert.mockResolvedValue({
+        id: 'evt_unknown',
+      });
       mockPrisma.qikinkWebhookEvent.update.mockResolvedValue({});
       mockPrisma.qikinkApiLog.create = jest.fn().mockResolvedValue({});
       mockPrisma.order.findFirst.mockResolvedValue(null);
@@ -640,14 +670,18 @@ describe('QikinkService - Order Submission Hardening', () => {
     it('P8-9. Authenticated webhook attempting to overwrite a terminal order state (DELIVERED) -> prevented', async () => {
       const secret = 'test_webhook_secret';
       const bodyStr = '{"order_id":"QIK_TERM_1","status":"cancelled"}';
-      const signature = require('crypto').createHmac('sha256', secret).update(bodyStr).digest('hex');
+      const signature = createHmac('sha256', secret)
+        .update(bodyStr)
+        .digest('hex');
 
       mockConfig.get.mockImplementation((key: string) => {
         if (key === 'qikink.webhookSecret') return secret;
         return null;
       });
       mockPrisma.qikinkWebhookEvent.findUnique.mockResolvedValue(null);
-      mockPrisma.qikinkWebhookEvent.upsert.mockResolvedValue({ id: 'evt_term' });
+      mockPrisma.qikinkWebhookEvent.upsert.mockResolvedValue({
+        id: 'evt_term',
+      });
       mockPrisma.qikinkWebhookEvent.update.mockResolvedValue({});
       mockPrisma.qikinkApiLog.create = jest.fn().mockResolvedValue({});
 
@@ -670,7 +704,12 @@ describe('QikinkService - Order Submission Hardening', () => {
         { order_id: 'QIK_TERM_1', status: 'cancelled' },
       );
 
-      expect(res).toEqual({ ok: true, matched: true, orderId: 'order_1', verified: true });
+      expect(res).toEqual({
+        ok: true,
+        matched: true,
+        orderId: 'order_1',
+        verified: true,
+      });
       const updateData = mockPrisma.order.update.mock.calls[0][0].data;
       expect(updateData.status).toBeUndefined(); // Status unchanged
       expect(mockClient.createOrder).not.toHaveBeenCalled();
@@ -682,7 +721,9 @@ describe('QikinkService - Order Submission Hardening', () => {
         return null;
       });
       mockPrisma.qikinkWebhookEvent.findUnique.mockResolvedValue(null);
-      mockPrisma.qikinkWebhookEvent.upsert.mockResolvedValue({ id: 'evt_unauth' });
+      mockPrisma.qikinkWebhookEvent.upsert.mockResolvedValue({
+        id: 'evt_unauth',
+      });
       mockPrisma.qikinkWebhookEvent.update.mockResolvedValue({});
       mockPrisma.qikinkApiLog.create = jest.fn().mockResolvedValue({});
 
@@ -706,9 +747,12 @@ describe('QikinkService - Order Submission Hardening', () => {
         verified: false,
         queuedSync: true,
       });
-      expect(mockQueue.enqueue).toHaveBeenCalledWith(QikinkJobType.SYNC_ORDER_STATUS, {
-        orderId: 'order_1',
-      });
+      expect(mockQueue.enqueue).toHaveBeenCalledWith(
+        QikinkJobType.SYNC_ORDER_STATUS,
+        {
+          orderId: 'order_1',
+        },
+      );
       // Order status update should NOT have been called directly
       expect(mockPrisma.order.update).not.toHaveBeenCalled();
     });
@@ -754,7 +798,11 @@ describe('QikinkService - Order Submission Hardening', () => {
         source: 'poll',
       });
 
-      expect(res).toEqual({ orderId: 'order_1', mapped: null, status: 'On Hold' });
+      expect(res).toEqual({
+        orderId: 'order_1',
+        mapped: null,
+        status: 'On Hold',
+      });
       const updateData = mockPrisma.order.update.mock.calls[0][0].data;
       expect(updateData.qikinkStatus).toBe('On Hold');
       expect(updateData.status).toBeUndefined(); // Status unchanged (remains CONFIRMED)
@@ -782,7 +830,9 @@ describe('QikinkService - Order Submission Hardening', () => {
       });
 
       const updateData = mockPrisma.order.update.mock.calls[0][0].data;
-      expect(updateData.estimatedDelivery).toEqual(new Date('2026-11-20T10:00:00Z'));
+      expect(updateData.estimatedDelivery).toEqual(
+        new Date('2026-11-20T10:00:00Z'),
+      );
 
       // Test invalid date string does not throw and ignores estimatedDelivery
       mockPrisma.order.update.mockClear();
@@ -824,17 +874,26 @@ describe('QikinkService - Order Submission Hardening', () => {
     it('P9-1. Losing the atomic submission claim skips without submitting', async () => {
       mockPrisma.order.findUnique
         .mockResolvedValueOnce(baseOrder)
-        .mockResolvedValueOnce({ ...baseOrder, qikinkSyncStatus: QikinkSyncStatus.SUBMITTING });
+        .mockResolvedValueOnce({
+          ...baseOrder,
+          qikinkSyncStatus: QikinkSyncStatus.SUBMITTING,
+        });
       mockPrisma.order.updateMany.mockResolvedValue({ count: 0 });
 
       const res = await service.processSubmitJob('order_1');
 
-      expect(res).toEqual({ skipped: true, reason: 'concurrent_submission_in_progress' });
+      expect(res).toEqual({
+        skipped: true,
+        reason: 'concurrent_submission_in_progress',
+      });
       expect(mockClient.createOrder).not.toHaveBeenCalled();
     });
 
     it('P9-2. A RETURNED order is never submitted to Qikink (fulfillment terminal guard)', async () => {
-      mockPrisma.order.findUnique.mockResolvedValue({ ...baseOrder, status: 'RETURNED' });
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        status: 'RETURNED',
+      });
 
       const res = await service.processSubmitJob('order_1');
 
@@ -874,7 +933,10 @@ describe('QikinkService - Order Submission Hardening', () => {
         qikinkOrderNumber: 'VYQ10001',
       });
       mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
-      mockClient.getOrderStatus.mockResolvedValue({ order_id: 'QIK777', status: 'confirmed' });
+      mockClient.getOrderStatus.mockResolvedValue({
+        order_id: 'QIK777',
+        status: 'confirmed',
+      });
 
       const res = await service.processSubmitJob('order_1');
 
@@ -891,11 +953,15 @@ describe('QikinkService - Order Submission Hardening', () => {
         (c: any[]) => c[0]?.data?.qikinkOrderId === 'QIK777',
       );
       expect(adoptUpdate).toBeDefined();
-      expect(adoptUpdate![0].data.qikinkSyncStatus).toBe(QikinkSyncStatus.SUBMITTED);
+      expect(adoptUpdate![0].data.qikinkSyncStatus).toBe(
+        QikinkSyncStatus.SUBMITTED,
+      );
       expect(mockPrisma.orderStatusHistory.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            note: expect.stringContaining('Reconciled interrupted Qikink submission'),
+            note: expect.stringContaining(
+              'Reconciled interrupted Qikink submission',
+            ),
           }),
         }),
       );
@@ -909,7 +975,10 @@ describe('QikinkService - Order Submission Hardening', () => {
       });
       mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
       mockClient.getOrderStatus.mockResolvedValue(null);
-      mockClient.createOrder.mockResolvedValue({ order_id: 'QIK900', message: 'Success' });
+      mockClient.createOrder.mockResolvedValue({
+        order_id: 'QIK900',
+        message: 'Success',
+      });
 
       const res = await service.processSubmitJob('order_1');
 
@@ -929,8 +998,13 @@ describe('QikinkService - Order Submission Hardening', () => {
         qikinkOrderNumber: 'VYQ10001',
       });
       mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
-      mockClient.getOrderStatus.mockRejectedValue(new Error('status endpoint down'));
-      mockClient.createOrder.mockResolvedValue({ order_id: 'QIK901', message: 'Success' });
+      mockClient.getOrderStatus.mockRejectedValue(
+        new Error('status endpoint down'),
+      );
+      mockClient.createOrder.mockResolvedValue({
+        order_id: 'QIK901',
+        message: 'Success',
+      });
 
       const res = await service.processSubmitJob('order_1');
 

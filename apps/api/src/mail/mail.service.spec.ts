@@ -26,7 +26,9 @@ describe('MailService password reset delivery through Resend', () => {
     } as Response);
     const service = createMailService();
 
-    await expect(service.sendPasswordResetEmail('customer@example.test', 'secure-token')).resolves.toBe(true);
+    await expect(
+      service.sendPasswordResetEmail('customer@example.test', 'secure-token'),
+    ).resolves.toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.resend.com/emails',
       expect.objectContaining({
@@ -54,14 +56,18 @@ describe('MailService password reset delivery through Resend', () => {
     } as Response);
     const service = createMailService();
 
-    await expect(service.sendPasswordResetEmail('customer@example.test', 'secure-token')).resolves.toBe(false);
+    await expect(
+      service.sendPasswordResetEmail('customer@example.test', 'secure-token'),
+    ).resolves.toBe(false);
   });
 
   it('returns false when the Resend API key is missing', async () => {
     const fetchMock = jest.spyOn(global, 'fetch');
     const service = createMailService('');
 
-    await expect(service.sendPasswordResetEmail('customer@example.test', 'secure-token')).resolves.toBe(false);
+    await expect(
+      service.sendPasswordResetEmail('customer@example.test', 'secure-token'),
+    ).resolves.toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

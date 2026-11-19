@@ -10,9 +10,16 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { CartService } from './cart.service';
-import { AddToCartDto, ApplyCouponDto, UpdateCartItemDto } from './dto/cart.dto';
+import {
+  AddToCartDto,
+  ApplyCouponDto,
+  UpdateCartItemDto,
+} from './dto/cart.dto';
 import { Public } from '../../common/decorators/public.decorator';
-import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
+import {
+  CurrentUser,
+  AuthUser,
+} from '../../common/decorators/current-user.decorator';
 
 @ApiTags('cart')
 @Controller('cart')

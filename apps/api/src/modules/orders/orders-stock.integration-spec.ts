@@ -40,18 +40,41 @@ describe('OrdersService checkout - Real PostgreSQL stock concurrency Integration
     prisma = new PrismaService();
     await prisma.$connect();
 
-    const mockMail = { sendOrderConfirmation: jest.fn().mockResolvedValue(undefined) };
-    const mockQikink = { enqueueOrderSubmission: jest.fn().mockResolvedValue({ queued: true }) };
-    service = new OrdersService(prisma, new CartService(prisma), mockMail as any, mockQikink as any);
+    const mockMail = {
+      sendOrderConfirmation: jest.fn().mockResolvedValue(undefined),
+    };
+    const mockQikink = {
+      enqueueOrderSubmission: jest.fn().mockResolvedValue({ queued: true }),
+    };
+    service = new OrdersService(
+      prisma,
+      new CartService(prisma),
+      mockMail as any,
+      mockQikink as any,
+    );
 
     // Clean prior artifacts
-    await prisma.order.deleteMany({ where: { id: { startsWith: 'pgs_order_' } } });
-    await prisma.cart.deleteMany({ where: { id: { startsWith: 'pgs_cart_' } } });
-    await prisma.productVariant.deleteMany({ where: { id: { startsWith: 'pgs_var_' } } });
-    await prisma.product.deleteMany({ where: { id: { startsWith: 'pgs_prod_' } } });
-    await prisma.category.deleteMany({ where: { id: { startsWith: 'pgs_cat_' } } });
-    await prisma.address.deleteMany({ where: { id: { startsWith: 'pgs_addr_' } } });
-    await prisma.user.deleteMany({ where: { id: { startsWith: 'pgs_user_' } } });
+    await prisma.order.deleteMany({
+      where: { id: { startsWith: 'pgs_order_' } },
+    });
+    await prisma.cart.deleteMany({
+      where: { id: { startsWith: 'pgs_cart_' } },
+    });
+    await prisma.productVariant.deleteMany({
+      where: { id: { startsWith: 'pgs_var_' } },
+    });
+    await prisma.product.deleteMany({
+      where: { id: { startsWith: 'pgs_prod_' } },
+    });
+    await prisma.category.deleteMany({
+      where: { id: { startsWith: 'pgs_cat_' } },
+    });
+    await prisma.address.deleteMany({
+      where: { id: { startsWith: 'pgs_addr_' } },
+    });
+    await prisma.user.deleteMany({
+      where: { id: { startsWith: 'pgs_user_' } },
+    });
 
     const a = await prisma.user.create({
       data: {
@@ -113,7 +136,11 @@ describe('OrdersService checkout - Real PostgreSQL stock concurrency Integration
 
     categoryId = (
       await prisma.category.create({
-        data: { id: `pgs_cat_${ts}`, name: 'PGS Stock', slug: `pgs-stock-${ts}` },
+        data: {
+          id: `pgs_cat_${ts}`,
+          name: 'PGS Stock',
+          slug: `pgs-stock-${ts}`,
+        },
       })
     ).id;
 
@@ -147,31 +174,57 @@ describe('OrdersService checkout - Real PostgreSQL stock concurrency Integration
 
   afterAll(async () => {
     if (prisma) {
-      await prisma.order.deleteMany({ where: { id: { startsWith: 'pgs_order_' } } });
-      await prisma.order.deleteMany({ where: { userId: { in: [userA, userB] } } });
-      await prisma.cart.deleteMany({ where: { id: { startsWith: 'pgs_cart_' } } });
-      await prisma.productVariant.deleteMany({ where: { id: { startsWith: 'pgs_var_' } } });
-      await prisma.product.deleteMany({ where: { id: { startsWith: 'pgs_prod_' } } });
-      await prisma.category.deleteMany({ where: { id: { startsWith: 'pgs_cat_' } } });
-      await prisma.address.deleteMany({ where: { id: { startsWith: 'pgs_addr_' } } });
-      await prisma.user.deleteMany({ where: { id: { startsWith: 'pgs_user_' } } });
+      await prisma.order.deleteMany({
+        where: { id: { startsWith: 'pgs_order_' } },
+      });
+      await prisma.order.deleteMany({
+        where: { userId: { in: [userA, userB] } },
+      });
+      await prisma.cart.deleteMany({
+        where: { id: { startsWith: 'pgs_cart_' } },
+      });
+      await prisma.productVariant.deleteMany({
+        where: { id: { startsWith: 'pgs_var_' } },
+      });
+      await prisma.product.deleteMany({
+        where: { id: { startsWith: 'pgs_prod_' } },
+      });
+      await prisma.category.deleteMany({
+        where: { id: { startsWith: 'pgs_cat_' } },
+      });
+      await prisma.address.deleteMany({
+        where: { id: { startsWith: 'pgs_addr_' } },
+      });
+      await prisma.user.deleteMany({
+        where: { id: { startsWith: 'pgs_user_' } },
+      });
       await prisma.$disconnect();
     }
   });
 
   async function setStock(n: number) {
-    await prisma.productVariant.update({ where: { id: variantId }, data: { stock: n } });
+    await prisma.productVariant.update({
+      where: { id: variantId },
+      data: { stock: n },
+    });
   }
 
   /** Fresh cart for a user containing exactly one line of `quantity` units. */
   async function seedCart(userId: string, tag: string, quantity: number) {
     let cart = await prisma.cart.findUnique({ where: { userId } });
     if (!cart) {
-      cart = await prisma.cart.create({ data: { id: `pgs_cart_${tag}_${ts}`, userId } });
+      cart = await prisma.cart.create({
+        data: { id: `pgs_cart_${tag}_${ts}`, userId },
+      });
     }
     await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
-    await prisma.cartItem.create({ data: { cartId: cart.id, productId, variantId, quantity } });
-    await prisma.cart.update({ where: { id: cart.id }, data: { couponCode: null } });
+    await prisma.cartItem.create({
+      data: { cartId: cart.id, productId, variantId, quantity },
+    });
+    await prisma.cart.update({
+      where: { id: cart.id },
+      data: { couponCode: null },
+    });
   }
 
   function dto(shippingAddressId: string) {
@@ -179,7 +232,9 @@ describe('OrdersService checkout - Real PostgreSQL stock concurrency Integration
   }
 
   async function resetOrders() {
-    await prisma.order.deleteMany({ where: { userId: { in: [userA, userB] } } });
+    await prisma.order.deleteMany({
+      where: { userId: { in: [userA, userB] } },
+    });
   }
 
   it('stock=1, two concurrent checkouts of 1 unit: exactly one order; stock lands at 0, never negative; loser leaves no rows', async () => {
@@ -194,29 +249,45 @@ describe('OrdersService checkout - Real PostgreSQL stock concurrency Integration
     ]);
 
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
-    const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+    const rejected = results.filter(
+      (r) => r.status === 'rejected',
+    ) as PromiseRejectedResult[];
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
-    expect(rejected[0].reason.message).toBe(`Insufficient stock for ${productName}`);
+    expect(rejected[0].reason.message).toBe(
+      `Insufficient stock for ${productName}`,
+    );
 
     // Stock landed at exactly 0 — never negative
-    const variant = await prisma.productVariant.findUnique({ where: { id: variantId } });
+    const variant = await prisma.productVariant.findUnique({
+      where: { id: variantId },
+    });
     expect(variant!.stock).toBe(0);
 
     // Exactly one order exists overall
-    const orders = await prisma.order.findMany({ where: { userId: { in: [userA, userB] } } });
+    const orders = await prisma.order.findMany({
+      where: { userId: { in: [userA, userB] } },
+    });
     expect(orders).toHaveLength(1);
 
     // The losing checkout was fully rolled back: no order, no items, no payment rows
     const winnerId = orders[0].userId;
     const loserId = winnerId === userA ? userB : userA;
     expect(await prisma.order.count({ where: { userId: loserId } })).toBe(0);
-    expect(await prisma.orderItem.count({ where: { order: { userId: loserId } } })).toBe(0);
-    expect(await prisma.payment.count({ where: { order: { userId: loserId } } })).toBe(0);
+    expect(
+      await prisma.orderItem.count({ where: { order: { userId: loserId } } }),
+    ).toBe(0);
+    expect(
+      await prisma.payment.count({ where: { order: { userId: loserId } } }),
+    ).toBe(0);
 
     // Winner has exactly one item line; product sold counter incremented once
-    expect(await prisma.orderItem.count({ where: { orderId: orders[0].id } })).toBe(1);
-    const product = await prisma.product.findUnique({ where: { id: productId } });
+    expect(
+      await prisma.orderItem.count({ where: { orderId: orders[0].id } }),
+    ).toBe(1);
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+    });
     expect(product!.totalSold).toBe(1);
   });
 
@@ -232,15 +303,23 @@ describe('OrdersService checkout - Real PostgreSQL stock concurrency Integration
     ]);
 
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
-    const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+    const rejected = results.filter(
+      (r) => r.status === 'rejected',
+    ) as PromiseRejectedResult[];
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
-    expect(rejected[0].reason.message).toBe(`Insufficient stock for ${productName}`);
+    expect(rejected[0].reason.message).toBe(
+      `Insufficient stock for ${productName}`,
+    );
 
-    const variant = await prisma.productVariant.findUnique({ where: { id: variantId } });
+    const variant = await prisma.productVariant.findUnique({
+      where: { id: variantId },
+    });
     expect(variant!.stock).toBe(1);
 
-    const orders = await prisma.order.findMany({ where: { userId: { in: [userA, userB] } } });
+    const orders = await prisma.order.findMany({
+      where: { userId: { in: [userA, userB] } },
+    });
     expect(orders).toHaveLength(1);
   });
 
@@ -253,7 +332,9 @@ describe('OrdersService checkout - Real PostgreSQL stock concurrency Integration
       `Insufficient stock for ${productName}`,
     );
 
-    const variant = await prisma.productVariant.findUnique({ where: { id: variantId } });
+    const variant = await prisma.productVariant.findUnique({
+      where: { id: variantId },
+    });
     expect(variant!.stock).toBe(1); // untouched
     expect(await prisma.order.count({ where: { userId: userA } })).toBe(0);
   });
@@ -273,8 +354,12 @@ describe('OrdersService checkout - Real PostgreSQL stock concurrency Integration
       `Insufficient stock for ${productName}`,
     );
 
-    const variant = await prisma.productVariant.findUnique({ where: { id: variantId } });
+    const variant = await prisma.productVariant.findUnique({
+      where: { id: variantId },
+    });
     expect(variant!.stock).toBe(0);
-    expect(await prisma.order.count({ where: { userId: { in: [userA, userB] } } })).toBe(1);
+    expect(
+      await prisma.order.count({ where: { userId: { in: [userA, userB] } } }),
+    ).toBe(1);
   });
 });

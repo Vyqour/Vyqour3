@@ -17,7 +17,13 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
     paymentStatus: PaymentStatus.PENDING,
     paymentMethod: PaymentMethod.RAZORPAY,
     items: [
-      { id: 'item_1', variantId: 'variant_1', productId: 'prod_1', quantity: 2, productName: 'Tee' },
+      {
+        id: 'item_1',
+        variantId: 'variant_1',
+        productId: 'prod_1',
+        quantity: 2,
+        productName: 'Tee',
+      },
     ],
   };
 
@@ -32,7 +38,10 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
         count: jest.fn(),
       },
       orderStatusHistory: { create: jest.fn() },
-      productVariant: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      productVariant: {
+        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       product: { update: jest.fn() },
       coupon: {
         findUnique: jest.fn(),
@@ -46,10 +55,19 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
       ),
     };
     mockCart = { getCart: jest.fn() };
-    mockMail = { sendOrderConfirmation: jest.fn().mockResolvedValue(undefined) };
-    mockQikink = { enqueueOrderSubmission: jest.fn().mockResolvedValue({ queued: true }) };
+    mockMail = {
+      sendOrderConfirmation: jest.fn().mockResolvedValue(undefined),
+    };
+    mockQikink = {
+      enqueueOrderSubmission: jest.fn().mockResolvedValue({ queued: true }),
+    };
 
-    service = new OrdersService(mockPrisma, mockCart as any, mockMail as any, mockQikink as any);
+    service = new OrdersService(
+      mockPrisma,
+      mockCart as any,
+      mockMail as any,
+      mockQikink as any,
+    );
   });
 
   describe('updateStatus - terminal and transition protection', () => {
@@ -59,7 +77,10 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
     });
 
     it('rejects reactivating a CANCELLED order (terminal state)', async () => {
-      mockPrisma.order.findUnique.mockResolvedValue({ ...baseOrder, status: OrderStatus.CANCELLED });
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        status: OrderStatus.CANCELLED,
+      });
 
       await expect(
         service.updateStatus('order_1', { status: 'CONFIRMED' }, 'admin_1'),
@@ -70,7 +91,10 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
     });
 
     it('rejects reactivating a REFUNDED order', async () => {
-      mockPrisma.order.findUnique.mockResolvedValue({ ...baseOrder, status: OrderStatus.REFUNDED });
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        status: OrderStatus.REFUNDED,
+      });
 
       await expect(
         service.updateStatus('order_1', { status: 'PROCESSING' }, 'admin_1'),
@@ -79,7 +103,10 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
     });
 
     it('rejects moving a RETURNED order back to an active state', async () => {
-      mockPrisma.order.findUnique.mockResolvedValue({ ...baseOrder, status: OrderStatus.RETURNED });
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        status: OrderStatus.RETURNED,
+      });
 
       await expect(
         service.updateStatus('order_1', { status: 'SHIPPED' }, 'admin_1'),
@@ -88,8 +115,14 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
     });
 
     it('allows the valid RETURNED → REFUNDED refund workflow', async () => {
-      mockPrisma.order.findUnique.mockResolvedValue({ ...baseOrder, status: OrderStatus.RETURNED });
-      mockPrisma.order.findFirst.mockResolvedValue({ ...baseOrder, status: OrderStatus.REFUNDED });
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        status: OrderStatus.RETURNED,
+      });
+      mockPrisma.order.findFirst.mockResolvedValue({
+        ...baseOrder,
+        status: OrderStatus.REFUNDED,
+      });
 
       await service.updateStatus('order_1', { status: 'REFUNDED' }, 'admin_1');
 
@@ -103,7 +136,10 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
     });
 
     it('rejects status regressions (DELIVERED → SHIPPED)', async () => {
-      mockPrisma.order.findUnique.mockResolvedValue({ ...baseOrder, status: OrderStatus.DELIVERED });
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        status: OrderStatus.DELIVERED,
+      });
 
       await expect(
         service.updateStatus('order_1', { status: 'SHIPPED' }, 'admin_1'),
@@ -111,20 +147,28 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
     });
 
     it('enforces the transition atomically: concurrent status change -> no write, no history', async () => {
-      mockPrisma.order.findUnique.mockResolvedValue({ ...baseOrder, status: OrderStatus.CONFIRMED });
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        status: OrderStatus.CONFIRMED,
+      });
       // The guarded update finds no row: another request changed the status first
       mockPrisma.order.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(
         service.updateStatus('order_1', { status: 'PROCESSING' }, 'admin_1'),
-      ).rejects.toThrow('Order status changed concurrently — refresh and retry');
+      ).rejects.toThrow(
+        'Order status changed concurrently — refresh and retry',
+      );
 
       expect(mockPrisma.orderStatusHistory.create).not.toHaveBeenCalled();
       expect(mockPrisma.productVariant.update).not.toHaveBeenCalled();
     });
 
     it('repeated same-status update does not create duplicate history entries', async () => {
-      mockPrisma.order.findUnique.mockResolvedValue({ ...baseOrder, status: OrderStatus.SHIPPED });
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        status: OrderStatus.SHIPPED,
+      });
 
       await service.updateStatus('order_1', { status: 'SHIPPED' }, 'admin_1');
 
@@ -133,7 +177,10 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
     });
 
     it('admin cancellation restores inventory exactly once, inside the transaction', async () => {
-      mockPrisma.order.findUnique.mockResolvedValue({ ...baseOrder, status: OrderStatus.CONFIRMED });
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...baseOrder,
+        status: OrderStatus.CONFIRMED,
+      });
 
       await service.updateStatus('order_1', { status: 'CANCELLED' }, 'admin_1');
 
@@ -201,8 +248,11 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
       expect(mockPrisma.orderStatusHistory.create).toHaveBeenCalledTimes(1); // only first cancel
     });
 
-    it('cannot cancel another user\'s order even if the status check passes', async () => {
-      mockPrisma.order.findFirst.mockResolvedValue({ ...baseOrder, userId: 'someone_else' });
+    it("cannot cancel another user's order even if the status check passes", async () => {
+      mockPrisma.order.findFirst.mockResolvedValue({
+        ...baseOrder,
+        userId: 'someone_else',
+      });
 
       await expect(service.cancel('order_1', 'user_1')).rejects.toThrow(); // ownership check in findOne
     });
@@ -256,7 +306,10 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
         usageCount: 9,
       });
 
-      await service.create('user_1', { paymentMethod: PaymentMethod.RAZORPAY, shippingAddressId: 'addr_1' } as any);
+      await service.create('user_1', {
+        paymentMethod: PaymentMethod.RAZORPAY,
+        shippingAddressId: 'addr_1',
+      } as any);
 
       // The claim re-checks the limit in the write predicate — the last use is
       // only granted when usageCount is still below the limit at write time.
@@ -285,7 +338,10 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
       mockPrisma.coupon.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(
-        service.create('user_1', { paymentMethod: PaymentMethod.RAZORPAY, shippingAddressId: 'addr_1' } as any),
+        service.create('user_1', {
+          paymentMethod: PaymentMethod.RAZORPAY,
+          shippingAddressId: 'addr_1',
+        } as any),
       ).rejects.toThrow('Coupon usage limit reached');
 
       // The whole checkout transaction threw -> order creation rolled back with it
@@ -302,7 +358,10 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
         usageCount: 999,
       });
 
-      await service.create('user_1', { paymentMethod: PaymentMethod.RAZORPAY, shippingAddressId: 'addr_1' } as any);
+      await service.create('user_1', {
+        paymentMethod: PaymentMethod.RAZORPAY,
+        shippingAddressId: 'addr_1',
+      } as any);
 
       expect(mockPrisma.coupon.updateMany).toHaveBeenCalledWith({
         where: {
@@ -326,7 +385,10 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
       });
 
       await expect(
-        service.create('user_1', { paymentMethod: PaymentMethod.RAZORPAY, shippingAddressId: 'addr_1' } as any),
+        service.create('user_1', {
+          paymentMethod: PaymentMethod.RAZORPAY,
+          shippingAddressId: 'addr_1',
+        } as any),
       ).rejects.toThrow('Invalid coupon');
       expect(mockPrisma.coupon.updateMany).not.toHaveBeenCalled();
     });
@@ -372,7 +434,10 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
     it('decrements stock atomically with a sufficient-stock predicate inside the checkout transaction', async () => {
       seedCart([stockCartItem()]);
 
-      await service.create('user_1', { paymentMethod: PaymentMethod.RAZORPAY, shippingAddressId: 'addr_1' } as any);
+      await service.create('user_1', {
+        paymentMethod: PaymentMethod.RAZORPAY,
+        shippingAddressId: 'addr_1',
+      } as any);
 
       // Conditional, atomic decrement: the WHERE clause re-checks stock at
       // write time, so the update itself is the oversell guard.
@@ -388,7 +453,10 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
       mockPrisma.productVariant.updateMany.mockResolvedValueOnce({ count: 0 });
 
       await expect(
-        service.create('user_1', { paymentMethod: PaymentMethod.RAZORPAY, shippingAddressId: 'addr_1' } as any),
+        service.create('user_1', {
+          paymentMethod: PaymentMethod.RAZORPAY,
+          shippingAddressId: 'addr_1',
+        } as any),
       ).rejects.toThrow('Insufficient stock for Tee');
 
       // The transaction threw at the stock guard — no later checkout side
@@ -399,11 +467,22 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
 
     it('rejects at the pre-check when the cart snapshot already shows insufficient stock', async () => {
       seedCart([
-        stockCartItem({ variant: { stock: 1, size: 'M', color: null, sku: 'TEE-M', price: 500 } }),
+        stockCartItem({
+          variant: {
+            stock: 1,
+            size: 'M',
+            color: null,
+            sku: 'TEE-M',
+            price: 500,
+          },
+        }),
       ]);
 
       await expect(
-        service.create('user_1', { paymentMethod: PaymentMethod.RAZORPAY, shippingAddressId: 'addr_1' } as any),
+        service.create('user_1', {
+          paymentMethod: PaymentMethod.RAZORPAY,
+          shippingAddressId: 'addr_1',
+        } as any),
       ).rejects.toThrow('Insufficient stock for Tee');
 
       expect(mockPrisma.productVariant.updateMany).not.toHaveBeenCalled();
@@ -413,7 +492,10 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
     it('variant-less items carry no stock guard and skip the decrement', async () => {
       seedCart([stockCartItem({ variantId: null, variant: null })]);
 
-      await service.create('user_1', { paymentMethod: PaymentMethod.RAZORPAY, shippingAddressId: 'addr_1' } as any);
+      await service.create('user_1', {
+        paymentMethod: PaymentMethod.RAZORPAY,
+        shippingAddressId: 'addr_1',
+      } as any);
 
       expect(mockPrisma.productVariant.updateMany).not.toHaveBeenCalled();
       // The product sold counter still tracks the line
@@ -424,7 +506,6 @@ describe('OrdersService - terminal protection, transitions, inventory, coupon cl
     });
   });
 });
-
 
 describe('OrdersService.track - customer verification', () => {
   let service: OrdersService;
@@ -438,21 +519,35 @@ describe('OrdersService.track - customer verification', () => {
   });
 
   it('rejects a missing email without querying the order', async () => {
-    await expect(service.track('VYQ10001', '')).rejects.toThrow('Order not found');
+    await expect(service.track('VYQ10001', '')).rejects.toThrow(
+      'Order not found',
+    );
     expect(mockPrisma.order.findUnique).not.toHaveBeenCalled();
   });
 
   it('rejects an incorrect email with the same not-found response', async () => {
-    mockPrisma.order.findUnique.mockResolvedValue({ user: { email: 'buyer@example.com' } });
-    await expect(service.track('VYQ10001', 'wrong@example.com')).rejects.toThrow('Order not found');
+    mockPrisma.order.findUnique.mockResolvedValue({
+      user: { email: 'buyer@example.com' },
+    });
+    await expect(
+      service.track('VYQ10001', 'wrong@example.com'),
+    ).rejects.toThrow('Order not found');
   });
 
   it('accepts the matching email case-insensitively and trims whitespace', async () => {
     const order = {
-      orderNumber: 'VYQ10001', status: 'SHIPPED', paymentStatus: 'PAID',
-      trackingNumber: 'AWB123', carrier: 'Courier', estimatedDelivery: null,
-      shippedAt: null, deliveredAt: null, createdAt: new Date(), items: [],
-      statusHistory: [], user: { email: 'Buyer@Example.com' },
+      orderNumber: 'VYQ10001',
+      status: 'SHIPPED',
+      paymentStatus: 'PAID',
+      trackingNumber: 'AWB123',
+      carrier: 'Courier',
+      estimatedDelivery: null,
+      shippedAt: null,
+      deliveredAt: null,
+      createdAt: new Date(),
+      items: [],
+      statusHistory: [],
+      user: { email: 'Buyer@Example.com' },
     };
     mockPrisma.order.findUnique.mockResolvedValue(order);
     const result = await service.track('VYQ10001', '  buyer@example.com  ');

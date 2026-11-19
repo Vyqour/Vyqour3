@@ -355,17 +355,27 @@ describe('qikink-order.mapper', () => {
       expect(mapQikinkStatusToOrderStatus('Live')).toBe('PROCESSING');
       expect(mapQikinkStatusToOrderStatus('Live OOS')).toBe('PROCESSING');
       expect(mapQikinkStatusToOrderStatus('To be Printed')).toBe('PROCESSING');
-      expect(mapQikinkStatusToOrderStatus('Partially Picklisted')).toBe('PROCESSING');
+      expect(mapQikinkStatusToOrderStatus('Partially Picklisted')).toBe(
+        'PROCESSING',
+      );
       expect(mapQikinkStatusToOrderStatus('Printed')).toBe('PROCESSING');
       expect(mapQikinkStatusToOrderStatus('Manifested')).toBe('PROCESSING');
       expect(mapQikinkStatusToOrderStatus('Dispatch Ready')).toBe('PROCESSING');
       expect(mapQikinkStatusToOrderStatus('Picked Up')).toBe('SHIPPED');
-      expect(mapQikinkStatusToOrderStatus('Partially Printed')).toBe('PROCESSING');
+      expect(mapQikinkStatusToOrderStatus('Partially Printed')).toBe(
+        'PROCESSING',
+      );
       expect(mapQikinkStatusToOrderStatus('In-Transit')).toBe('SHIPPED');
       expect(mapQikinkStatusToOrderStatus('RTO Initiated')).toBeNull();
-      expect(mapQikinkStatusToOrderStatus('Out for Delivery')).toBe('OUT_FOR_DELIVERY');
-      expect(mapQikinkStatusToOrderStatus('Delivery rescheduled')).toBe('OUT_FOR_DELIVERY');
-      expect(mapQikinkStatusToOrderStatus('Reverse Pickup Initiated')).toBeNull();
+      expect(mapQikinkStatusToOrderStatus('Out for Delivery')).toBe(
+        'OUT_FOR_DELIVERY',
+      );
+      expect(mapQikinkStatusToOrderStatus('Delivery rescheduled')).toBe(
+        'OUT_FOR_DELIVERY',
+      );
+      expect(
+        mapQikinkStatusToOrderStatus('Reverse Pickup Initiated'),
+      ).toBeNull();
       expect(mapQikinkStatusToOrderStatus('Delivered')).toBe('DELIVERED');
       expect(mapQikinkStatusToOrderStatus('Cancelled')).toBe('CANCELLED');
       expect(mapQikinkStatusToOrderStatus('Returned')).toBe('RETURNED');

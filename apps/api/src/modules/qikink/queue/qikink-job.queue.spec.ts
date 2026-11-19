@@ -60,8 +60,11 @@ describe('QikinkJobQueue - lock timeout, stale reclamation, ownership guards', (
         lockedAt: { lt: expect.any(Date) },
       });
       // Cutoff honors the configured 60s timeout (not more than ~60s old)
-      const cutoff: Date = mockTx.qikinkJob.updateMany.mock.calls[0][0].where.lockedAt.lt;
-      expect(Math.abs(Date.now() - cutoff.getTime() - 60_000)).toBeLessThan(5_000);
+      const cutoff: Date =
+        mockTx.qikinkJob.updateMany.mock.calls[0][0].where.lockedAt.lt;
+      expect(Math.abs(Date.now() - cutoff.getTime() - 60_000)).toBeLessThan(
+        5_000,
+      );
       // 2nd updateMany call: guarded PENDING -> PROCESSING claim
       expect(mockTx.qikinkJob.updateMany.mock.calls[1][0]).toMatchObject({
         where: { id: 'job_1', status: QikinkJobStatus.PENDING },
@@ -77,7 +80,7 @@ describe('QikinkJobQueue - lock timeout, stale reclamation, ownership guards', (
     it('claims a job with an ownership stamp so two workers cannot own the same job', async () => {
       const candidate = { id: 'job_2', status: QikinkJobStatus.PENDING };
       mockTx.qikinkJob.findFirst.mockResolvedValue(candidate);
-      mockTx.qikinkJob.findUnique.mockImplementation(async ({ where }: any) => ({
+      mockTx.qikinkJob.findUnique.mockImplementation(async () => ({
         ...candidate,
         status: QikinkJobStatus.PROCESSING,
         lockedBy: mockTx.qikinkJob.updateMany.mock.calls[1][0].data.lockedBy,
@@ -85,7 +88,9 @@ describe('QikinkJobQueue - lock timeout, stale reclamation, ownership guards', (
 
       const jobA = await queue.claimNext();
       expect(jobA?.lockedBy).toEqual(expect.any(String));
-      expect(mockTx.qikinkJob.updateMany.mock.calls[1][0].data.lockedBy).toBe(jobA?.lockedBy);
+      expect(mockTx.qikinkJob.updateMany.mock.calls[1][0].data.lockedBy).toBe(
+        jobA?.lockedBy,
+      );
     });
 
     it('loses the claim race safely: guarded updateMany count=0 -> no job owned, retries then stops', async () => {
@@ -101,7 +106,9 @@ describe('QikinkJobQueue - lock timeout, stale reclamation, ownership guards', (
 
       expect(job).toBeNull();
       // Bounded retries: initial claim + 2 retries, then give up for this tick
-      const claimCalls = mockTx.qikinkJob.updateMany.mock.calls.filter((c: any[]) => c[0]?.where?.id);
+      const claimCalls = mockTx.qikinkJob.updateMany.mock.calls.filter(
+        (c: any[]) => c[0]?.where?.id,
+      );
       expect(claimCalls.length).toBe(3);
     });
 
@@ -113,7 +120,9 @@ describe('QikinkJobQueue - lock timeout, stale reclamation, ownership guards', (
 
       expect(job).toBeNull();
       // Only the reclamation call runs; no claim attempts on an empty queue
-      const claimCalls = mockTx.qikinkJob.updateMany.mock.calls.filter((c: any[]) => c[0]?.where?.id);
+      const claimCalls = mockTx.qikinkJob.updateMany.mock.calls.filter(
+        (c: any[]) => c[0]?.where?.id,
+      );
       expect(claimCalls.length).toBe(0);
     });
   });
@@ -205,10 +214,15 @@ describe('QikinkJobQueue - lock timeout, stale reclamation, ownership guards', (
 
   describe('enqueue (existing dedup preserved)', () => {
     it('does not create a second active SYNC_ORDER_STATUS job for the same order', async () => {
-      const existing = { id: 'status_job_active', type: QikinkJobType.SYNC_ORDER_STATUS };
+      const existing = {
+        id: 'status_job_active',
+        type: QikinkJobType.SYNC_ORDER_STATUS,
+      };
       mockTx.qikinkJob.findFirst.mockResolvedValue(existing);
 
-      const job = await queue.enqueue(QikinkJobType.SYNC_ORDER_STATUS, { orderId: 'order_1' });
+      const job = await queue.enqueue(QikinkJobType.SYNC_ORDER_STATUS, {
+        orderId: 'order_1',
+      });
 
       expect(job.id).toBe('status_job_active');
       expect(mockTx.qikinkJob.findFirst).toHaveBeenCalledWith({
@@ -224,7 +238,9 @@ describe('QikinkJobQueue - lock timeout, stale reclamation, ownership guards', (
       const existing = { id: 'job_active', type: QikinkJobType.SUBMIT_ORDER };
       mockTx.qikinkJob.findFirst.mockResolvedValue(existing);
 
-      const job = await queue.enqueue(QikinkJobType.SUBMIT_ORDER, { orderId: 'order_1' });
+      const job = await queue.enqueue(QikinkJobType.SUBMIT_ORDER, {
+        orderId: 'order_1',
+      });
 
       expect(job.id).toBe('job_active');
       expect(mockTx.qikinkJob.create).toBeUndefined(); // no create model on this mock — dedup short-circuits

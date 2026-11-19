@@ -58,7 +58,10 @@ describe('CartService stock and coupon safeguards', () => {
 
   it('rejects adding a quantity that would exceed remaining variant stock', async () => {
     await expect(
-      service.addItem({ productId: 'product_1', variantId: 'variant_1', quantity: 2 }, 'user_1'),
+      service.addItem(
+        { productId: 'product_1', variantId: 'variant_1', quantity: 2 },
+        'user_1',
+      ),
     ).rejects.toThrow('Only 3 unit(s) are available for this variant');
 
     expect(prisma.cartItem.update).not.toHaveBeenCalled();
@@ -75,7 +78,10 @@ describe('CartService stock and coupon safeguards', () => {
 
   it('does not grant free shipping from an expired free-shipping coupon', async () => {
     prisma.cart.findUnique.mockResolvedValue(
-      cart({ couponCode: 'FREESHIP', items: [{ ...cart().items[0], quantity: 1 }] }),
+      cart({
+        couponCode: 'FREESHIP',
+        items: [{ ...cart().items[0], quantity: 1 }],
+      }),
     );
     prisma.coupon.findUnique.mockResolvedValue({
       code: 'FREESHIP',

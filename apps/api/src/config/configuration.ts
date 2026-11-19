@@ -70,7 +70,9 @@ export default () => ({
     clientId: process.env.QIKINK_CLIENT_ID || '',
     clientSecret: process.env.QIKINK_CLIENT_SECRET || '',
     sandboxSecret:
-      process.env.QIKINK_SANDBOX_SECRET || process.env.QIKINK_CLIENT_SECRET || '',
+      process.env.QIKINK_SANDBOX_SECRET ||
+      process.env.QIKINK_CLIENT_SECRET ||
+      '',
     baseUrl:
       process.env.QIKINK_BASE_URL ||
       ((process.env.QIKINK_SANDBOX || 'true').toLowerCase() === 'true'
@@ -78,12 +80,20 @@ export default () => ({
         : 'https://api.qikink.com'),
     shipping: process.env.QIKINK_SHIPPING || '1',
     webhookSecret: process.env.QIKINK_WEBHOOK_SECRET || '',
-    autoSubmit: (process.env.QIKINK_AUTO_SUBMIT || 'true').toLowerCase() === 'true',
+    autoSubmit:
+      (process.env.QIKINK_AUTO_SUBMIT || 'true').toLowerCase() === 'true',
     maxAttempts: parseInt(process.env.QIKINK_MAX_ATTEMPTS || '8', 10),
-    jobLockTimeoutMs: parseInt(process.env.QIKINK_JOB_LOCK_TIMEOUT_MS || '600000', 10),
-    workerIntervalMs: parseInt(process.env.QIKINK_WORKER_INTERVAL_MS || '15000', 10),
+    jobLockTimeoutMs: parseInt(
+      process.env.QIKINK_JOB_LOCK_TIMEOUT_MS || '600000',
+      10,
+    ),
+    workerIntervalMs: parseInt(
+      process.env.QIKINK_WORKER_INTERVAL_MS || '15000',
+      10,
+    ),
     statusPollEnabled:
-      (process.env.QIKINK_STATUS_POLL_ENABLED || 'true').toLowerCase() === 'true',
+      (process.env.QIKINK_STATUS_POLL_ENABLED || 'true').toLowerCase() ===
+      'true',
     statusEndpoint: process.env.QIKINK_STATUS_ENDPOINT || '/api/order/status',
     productsEndpoint: process.env.QIKINK_PRODUCTS_ENDPOINT || '/api/products',
   },

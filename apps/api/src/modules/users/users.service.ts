@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { paginate, paginationMeta } from '../../common/dto/pagination.dto';
 import { Prisma, Role, UserStatus } from '@prisma/client';
@@ -9,7 +13,12 @@ export class UsersService {
 
   async updateProfile(
     userId: string,
-    data: { firstName?: string; lastName?: string; phone?: string; avatarUrl?: string },
+    data: {
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+      avatarUrl?: string;
+    },
   ) {
     return this.prisma.user.update({
       where: { id: userId },
@@ -42,11 +51,18 @@ export class UsersService {
     return { message: 'Account deleted' };
   }
 
-  async adminList(query: { page?: number; limit?: number; search?: string; role?: string }) {
+  async adminList(query: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    role?: string;
+  }) {
     const page = query.page || 1;
     const limit = query.limit || 20;
     const { skip, take } = paginate(page, limit);
-    const where: Prisma.UserWhereInput = { status: { not: UserStatus.DELETED } };
+    const where: Prisma.UserWhereInput = {
+      status: { not: UserStatus.DELETED },
+    };
     if (query.role) where.role = query.role as Role;
     if (query.search) {
       where.OR = [
@@ -81,7 +97,8 @@ export class UsersService {
   }
 
   async adminUpdateRole(id: string, role: Role) {
-    if (role === Role.SUPER_ADMIN) throw new BadRequestException('Cannot assign SUPER_ADMIN');
+    if (role === Role.SUPER_ADMIN)
+      throw new BadRequestException('Cannot assign SUPER_ADMIN');
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
     return this.prisma.user.update({

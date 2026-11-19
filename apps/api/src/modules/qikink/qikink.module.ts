@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { QikinkApiClient } from './client/qikink-api.client';
 import { QikinkJobQueue } from './queue/qikink-job.queue';
 import { QikinkService } from './qikink.service';

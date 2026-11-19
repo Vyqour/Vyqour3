@@ -32,7 +32,9 @@ const orderInclude = {
     },
   },
   shippingAddress: true,
-  user: { select: { email: true, firstName: true, lastName: true, phone: true } },
+  user: {
+    select: { email: true, firstName: true, lastName: true, phone: true },
+  },
 } satisfies Prisma.OrderInclude;
 
 @Injectable()
@@ -61,15 +63,26 @@ export class QikinkService {
    */
   async enqueueOrderSubmission(orderId: string, reason = 'auto') {
     if (!this.isEnabled() || !this.autoSubmitEnabled()) {
-      this.logger.debug(`Qikink submit skipped (disabled) order=${orderId} reason=${reason}`);
+      this.logger.debug(
+        `Qikink submit skipped (disabled) order=${orderId} reason=${reason}`,
+      );
       return { queued: false, reason: 'disabled' };
     }
 
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
     if (!order) throw new NotFoundException('Order not found');
 
-    if (order.qikinkOrderId || order.qikinkSyncStatus === QikinkSyncStatus.SUBMITTED) {
-      return { queued: false, reason: 'already_submitted', qikinkOrderId: order.qikinkOrderId };
+    if (
+      order.qikinkOrderId ||
+      order.qikinkSyncStatus === QikinkSyncStatus.SUBMITTED
+    ) {
+      return {
+        queued: false,
+        reason: 'already_submitted',
+        qikinkOrderId: order.qikinkOrderId,
+      };
     }
 
     // Terminal orders must never be queued for fulfillment, whatever path calls
@@ -86,7 +99,10 @@ export class QikinkService {
     }
 
     // Prepaid must be PAID before Qikink submission
-    if (order.paymentMethod !== PaymentMethod.COD && order.paymentStatus !== PaymentStatus.PAID) {
+    if (
+      order.paymentMethod !== PaymentMethod.COD &&
+      order.paymentStatus !== PaymentStatus.PAID
+    ) {
       await this.prisma.order.update({
         where: { id: orderId },
         data: {
@@ -103,7 +119,10 @@ export class QikinkService {
       OrderStatus.PROCESSING,
       OrderStatus.SHIPPED,
     ];
-    if (!allowed.includes(order.status) && order.status === OrderStatus.PENDING) {
+    if (
+      !allowed.includes(order.status) &&
+      order.status === OrderStatus.PENDING
+    ) {
       // COD path may still be pending briefly — allow CONFIRMED only
       if (order.paymentMethod !== PaymentMethod.COD) {
         return { queued: false, reason: 'order_not_confirmed' };
@@ -112,7 +131,10 @@ export class QikinkService {
 
     const idempotencyKey =
       order.qikinkIdempotencyKey ||
-      createHash('sha256').update(`${order.id}:${order.orderNumber}:qikink`).digest('hex').slice(0, 32);
+      createHash('sha256')
+        .update(`${order.id}:${order.orderNumber}:qikink`)
+        .digest('hex')
+        .slice(0, 32);
 
     const job = await this.prisma.$transaction(async (tx) => {
       await tx.order.update({
@@ -135,7 +157,9 @@ export class QikinkService {
       );
     });
 
-    this.logger.log(`Queued Qikink submit job=${job.id} order=${order.orderNumber} reason=${reason}`);
+    this.logger.log(
+      `Queued Qikink submit job=${job.id} order=${order.orderNumber} reason=${reason}`,
+    );
     return { queued: true, jobId: job.id };
   }
 
@@ -146,11 +170,21 @@ export class QikinkService {
     });
     if (!order) throw new NotFoundException('Order not found');
 
-    if (order.qikinkOrderId || order.qikinkSyncStatus === QikinkSyncStatus.SUBMITTED) {
-      return { skipped: true, qikinkOrderId: order.qikinkOrderId, reason: 'already_submitted' };
+    if (
+      order.qikinkOrderId ||
+      order.qikinkSyncStatus === QikinkSyncStatus.SUBMITTED
+    ) {
+      return {
+        skipped: true,
+        qikinkOrderId: order.qikinkOrderId,
+        reason: 'already_submitted',
+      };
     }
 
-    if (order.paymentMethod !== PaymentMethod.COD && order.paymentStatus !== PaymentStatus.PAID) {
+    if (
+      order.paymentMethod !== PaymentMethod.COD &&
+      order.paymentStatus !== PaymentStatus.PAID
+    ) {
       await this.prisma.order.update({
         where: { id: orderId },
         data: {
@@ -178,7 +212,9 @@ export class QikinkService {
       where: {
         id: orderId,
         qikinkOrderId: null,
-        qikinkSyncStatus: { notIn: [QikinkSyncStatus.SUBMITTING, QikinkSyncStatus.SUBMITTED] },
+        qikinkSyncStatus: {
+          notIn: [QikinkSyncStatus.SUBMITTING, QikinkSyncStatus.SUBMITTED],
+        },
       },
       data: {
         qikinkSyncStatus: QikinkSyncStatus.SUBMITTING,
@@ -187,9 +223,18 @@ export class QikinkService {
     });
 
     if (!claimResult.count) {
-      const fresh = await this.prisma.order.findUnique({ where: { id: orderId } });
-      if (fresh?.qikinkOrderId || fresh?.qikinkSyncStatus === QikinkSyncStatus.SUBMITTED) {
-        return { skipped: true, qikinkOrderId: fresh.qikinkOrderId, reason: 'already_submitted' };
+      const fresh = await this.prisma.order.findUnique({
+        where: { id: orderId },
+      });
+      if (
+        fresh?.qikinkOrderId ||
+        fresh?.qikinkSyncStatus === QikinkSyncStatus.SUBMITTED
+      ) {
+        return {
+          skipped: true,
+          qikinkOrderId: fresh.qikinkOrderId,
+          reason: 'already_submitted',
+        };
       }
       return { skipped: true, reason: 'concurrent_submission_in_progress' };
     }
@@ -253,7 +298,8 @@ export class QikinkService {
 
     try {
       const response = await this.client.createOrder(payload, orderId);
-      const qikinkOrderId = response.order_id != null ? String(response.order_id) : null;
+      const qikinkOrderId =
+        response.order_id != null ? String(response.order_id) : null;
       if (!qikinkOrderId) {
         // Provider response is UNCERTAIN: the order may or may not have been
         // created. Do NOT mark this permanently failed — keep it retryable so the
@@ -276,7 +322,8 @@ export class QikinkService {
             qikinkResponse: response as object,
             qikinkLastError: null,
             status:
-              order.status === OrderStatus.CONFIRMED || order.status === OrderStatus.PENDING
+              order.status === OrderStatus.CONFIRMED ||
+              order.status === OrderStatus.PENDING
                 ? OrderStatus.PROCESSING
                 : order.status,
           },
@@ -285,7 +332,8 @@ export class QikinkService {
           data: {
             orderId,
             status:
-              order.status === OrderStatus.CONFIRMED || order.status === OrderStatus.PENDING
+              order.status === OrderStatus.CONFIRMED ||
+              order.status === OrderStatus.PENDING
                 ? OrderStatus.PROCESSING
                 : order.status,
             note: `Submitted to Qikink (ID ${qikinkOrderId})`,
@@ -297,7 +345,10 @@ export class QikinkService {
             action: 'QIKINK_ORDER_SUBMITTED',
             entity: 'Order',
             entityId: orderId,
-            metadata: { qikinkOrderId, payloadOrderNumber: payload.order_number },
+            metadata: {
+              qikinkOrderId,
+              payloadOrderNumber: payload.order_number,
+            },
           },
         }),
       ]);
@@ -323,7 +374,9 @@ export class QikinkService {
       await this.prisma.order.update({
         where: { id: orderId },
         data: {
-          qikinkSyncStatus: isPermanent ? QikinkSyncStatus.FAILED : QikinkSyncStatus.QUEUED,
+          qikinkSyncStatus: isPermanent
+            ? QikinkSyncStatus.FAILED
+            : QikinkSyncStatus.QUEUED,
           qikinkLastError: message.slice(0, 1000),
         },
       });
@@ -368,7 +421,10 @@ export class QikinkService {
   ) {
     let status: Awaited<ReturnType<typeof this.client.getOrderStatus>> = null;
     try {
-      status = await this.client.getOrderStatus({ orderNumber, internalOrderId: orderId });
+      status = await this.client.getOrderStatus({
+        orderNumber,
+        internalOrderId: orderId,
+      });
     } catch {
       status = null;
     }
@@ -480,7 +536,9 @@ export class QikinkService {
   }
 
   async processStatusSync(orderId: string) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
     if (!order?.qikinkOrderId) {
       return { skipped: true, reason: 'missing_qikink_order_id' };
     }
@@ -492,7 +550,9 @@ export class QikinkService {
     if (!status || typeof status !== 'object') {
       // A missing provider response is not a successful sync. Throw so the
       // worker retries with backoff and eventually dead-letters the job.
-      throw new Error('Qikink order status unavailable or not found; retry scheduled');
+      throw new Error(
+        'Qikink order status unavailable or not found; retry scheduled',
+      );
     }
     return this.applyFulfillmentUpdate(order.id, {
       status: status.status || status.order_status,
@@ -521,7 +581,9 @@ export class QikinkService {
 
     const mapped = mapQikinkStatusToOrderStatus(update.status);
     const rawStatus = update.status || order.qikinkStatus;
-    const rawStatusChanged = Boolean(update.status && update.status !== order.qikinkStatus);
+    const rawStatusChanged = Boolean(
+      update.status && update.status !== order.qikinkStatus,
+    );
 
     const data: Prisma.OrderUpdateInput = {
       qikinkStatus: rawStatus,
@@ -545,7 +607,10 @@ export class QikinkService {
         r.estimated_delivery ||
         r.expected_delivery_date_time;
 
-      if (rawEdd && (typeof rawEdd === 'string' || typeof rawEdd === 'number')) {
+      if (
+        rawEdd &&
+        (typeof rawEdd === 'string' || typeof rawEdd === 'number')
+      ) {
         const parsed = new Date(rawEdd);
         if (!isNaN(parsed.getTime())) {
           data.estimatedDelivery = parsed;
@@ -563,7 +628,11 @@ export class QikinkService {
       OrderStatus.RETURNED,
     ];
 
-    if (mapped && mapped !== order.status && !terminalStates.includes(order.status)) {
+    if (
+      mapped &&
+      mapped !== order.status &&
+      !terminalStates.includes(order.status)
+    ) {
       // Don't regress or overwrite higher status ranks
       const rank: Record<string, number> = {
         PENDING: 0,
@@ -608,7 +677,11 @@ export class QikinkService {
           createdBy: 'qikink',
         },
       });
-    } else if (rawStatusChanged && update.status && /(hold|on hold)/i.test(update.status)) {
+    } else if (
+      rawStatusChanged &&
+      update.status &&
+      /(hold|on hold)/i.test(update.status)
+    ) {
       await this.prisma.orderStatusHistory.create({
         data: {
           orderId,
@@ -667,11 +740,15 @@ export class QikinkService {
     const secret = this.config.get<string>('qikink.webhookSecret') || '';
     let signatureValid = false;
     if (secret && signatureHeader && rawBody) {
-      const raw = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
+      const raw =
+        typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
       const expected = createHmac('sha256', secret).update(raw).digest('hex');
       const provided = signatureHeader.replace(/^sha256=/i, '').trim();
       try {
-        signatureValid = timingSafeEqual(Buffer.from(expected), Buffer.from(provided));
+        signatureValid = timingSafeEqual(
+          Buffer.from(expected),
+          Buffer.from(provided),
+        );
       } catch {
         signatureValid = false;
       }
@@ -687,21 +764,40 @@ export class QikinkService {
     }
 
     const eventType = String(
-      body.event || body.event_type || body.type || body.status || 'order.status',
+      body.event ||
+        body.event_type ||
+        body.type ||
+        body.status ||
+        'order.status',
     );
-    const qikinkOrderId = body.order_id != null ? String(body.order_id) : body.qikink_order_id != null ? String(body.qikink_order_id) : null;
-    const orderNumber = body.order_number != null ? String(body.order_number) : body.orderNumber != null ? String(body.orderNumber) : null;
+    const qikinkOrderId =
+      body.order_id != null
+        ? String(body.order_id)
+        : body.qikink_order_id != null
+          ? String(body.qikink_order_id)
+          : null;
+    const orderNumber =
+      body.order_number != null
+        ? String(body.order_number)
+        : body.orderNumber != null
+          ? String(body.orderNumber)
+          : null;
     const eventId =
       (body.event_id as string) ||
       (body.id as string) ||
-      createHash('sha256').update(JSON.stringify(body)).digest('hex').slice(0, 40);
+      createHash('sha256')
+        .update(JSON.stringify(body))
+        .digest('hex')
+        .slice(0, 40);
 
-    const existing = await this.prisma.qikinkWebhookEvent.findUnique({ where: { eventId } });
+    const existing = await this.prisma.qikinkWebhookEvent.findUnique({
+      where: { eventId },
+    });
     if (existing?.processed) {
       return { ok: true, duplicate: true };
     }
 
-    let order =
+    const order =
       (qikinkOrderId &&
         (await this.prisma.order.findFirst({ where: { qikinkOrderId } }))) ||
       (orderNumber &&
@@ -742,7 +838,11 @@ export class QikinkService {
     if (!order) {
       await this.prisma.qikinkWebhookEvent.update({
         where: { id: event.id },
-        data: { processed: true, processedAt: new Date(), error: 'Order not found' },
+        data: {
+          processed: true,
+          processedAt: new Date(),
+          error: 'Order not found',
+        },
       });
       return { ok: true, matched: false };
     }
@@ -757,17 +857,34 @@ export class QikinkService {
           processed: true,
           processedAt: new Date(),
           orderId: order.id,
-          error: 'Unauthenticated webhook event: status sync enqueued for verification',
+          error:
+            'Unauthenticated webhook event: status sync enqueued for verification',
         },
       });
-      await this.queue.enqueue(QikinkJobType.SYNC_ORDER_STATUS, { orderId: order.id });
-      return { ok: true, matched: true, orderId: order.id, verified: false, queuedSync: true };
+      await this.queue.enqueue(QikinkJobType.SYNC_ORDER_STATUS, {
+        orderId: order.id,
+      });
+      return {
+        ok: true,
+        matched: true,
+        orderId: order.id,
+        verified: false,
+        queuedSync: true,
+      };
     }
 
     try {
-      const status = String(body.status || body.order_status || body.fulfillment_status || eventType);
-      const awb = (body.awb || body.tracking_number || body.trackingNumber) as string | undefined;
-      const courier = (body.courier || body.carrier || body.shipping_partner) as string | undefined;
+      const status = String(
+        body.status ||
+          body.order_status ||
+          body.fulfillment_status ||
+          eventType,
+      );
+      const awb = (body.awb || body.tracking_number || body.trackingNumber) as
+        string | undefined;
+      const courier = (body.courier ||
+        body.carrier ||
+        body.shipping_partner) as string | undefined;
       await this.applyFulfillmentUpdate(order.id, {
         status,
         awb,
@@ -796,9 +913,9 @@ export class QikinkService {
       const items = Array.isArray(data)
         ? data
         : Array.isArray((data as { products?: unknown[] })?.products)
-          ? ((data as { products: unknown[] }).products)
+          ? (data as { products: unknown[] }).products
           : Array.isArray((data as { data?: unknown[] })?.data)
-            ? ((data as { data: unknown[] }).data)
+            ? (data as { data: unknown[] }).data
             : [];
 
       let upserts = 0;
@@ -815,7 +932,8 @@ export class QikinkService {
             color: (row.color || null) as string | null,
             size: (row.size || null) as string | null,
             basePrice: row.price != null ? Number(row.price) : undefined,
-            printTypeId: row.print_type_id != null ? Number(row.print_type_id) : undefined,
+            printTypeId:
+              row.print_type_id != null ? Number(row.print_type_id) : undefined,
             raw: row as object,
             lastSyncedAt: new Date(),
           },
@@ -825,7 +943,8 @@ export class QikinkService {
             color: (row.color || null) as string | null,
             size: (row.size || null) as string | null,
             basePrice: row.price != null ? Number(row.price) : undefined,
-            printTypeId: row.print_type_id != null ? Number(row.print_type_id) : undefined,
+            printTypeId:
+              row.print_type_id != null ? Number(row.print_type_id) : undefined,
             raw: row as object,
             lastSyncedAt: new Date(),
           },
@@ -899,10 +1018,15 @@ export class QikinkService {
   }
 
   async adminRetry(orderId: string) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
     if (!order) throw new NotFoundException('Order not found');
     if (order.qikinkOrderId) {
-      return { message: 'Already submitted', qikinkOrderId: order.qikinkOrderId };
+      return {
+        message: 'Already submitted',
+        qikinkOrderId: order.qikinkOrderId,
+      };
     }
     await this.queue.requeueDead(orderId);
     await this.prisma.order.update({

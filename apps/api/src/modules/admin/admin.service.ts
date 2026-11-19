@@ -10,11 +10,21 @@ export class AdminService {
     // Use UTC boundaries so the same dashboard day is used regardless of
     // the timezone configured on the API host.
     const now = new Date();
-    const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const startOfDay = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    );
+    const startOfMonth = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    );
     const revenueWhere = {
       paymentStatus: PaymentStatus.PAID,
-      status: { notIn: [OrderStatus.CANCELLED, OrderStatus.REFUNDED, OrderStatus.RETURNED] },
+      status: {
+        notIn: [
+          OrderStatus.CANCELLED,
+          OrderStatus.REFUNDED,
+          OrderStatus.RETURNED,
+        ],
+      },
     };
 
     const [
@@ -42,7 +52,9 @@ export class AdminService {
       }),
       this.prisma.user.count({ where: { role: 'CUSTOMER', status: 'ACTIVE' } }),
       this.prisma.product.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.productVariant.count({ where: { stock: { lte: 5 }, isActive: true } }),
+      this.prisma.productVariant.count({
+        where: { stock: { lte: 5 }, isActive: true },
+      }),
       this.prisma.order.findMany({
         take: 8,
         orderBy: { createdAt: 'desc' },

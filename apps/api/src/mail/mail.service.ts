@@ -9,15 +9,25 @@ export class MailService {
 
   constructor(private readonly config: ConfigService) {
     this.apiKey = this.config.get<string>('resend.apiKey');
-    this.from = this.config.get<string>('resend.from') || 'VYQOUR <noreply@vyqour.com>';
+    this.from =
+      this.config.get<string>('resend.from') || 'VYQOUR <noreply@vyqour.com>';
     if (!this.apiKey) {
-      this.logger.warn('RESEND_API_KEY is not configured — outgoing emails are disabled');
+      this.logger.warn(
+        'RESEND_API_KEY is not configured — outgoing emails are disabled',
+      );
     }
   }
 
-  private async send(to: string, subject: string, html: string, replyTo?: string): Promise<boolean> {
+  private async send(
+    to: string,
+    subject: string,
+    html: string,
+    replyTo?: string,
+  ): Promise<boolean> {
     if (!this.apiKey) {
-      this.logger.warn(`Email not sent: Resend API key is not configured (subject=${subject})`);
+      this.logger.warn(
+        `Email not sent: Resend API key is not configured (subject=${subject})`,
+      );
       return false;
     }
 
@@ -40,7 +50,9 @@ export class MailService {
 
       if (!response.ok) {
         const details = await response.text();
-        this.logger.error(`Resend rejected email (status=${response.status}): ${details}`);
+        this.logger.error(
+          `Resend rejected email (status=${response.status}): ${details}`,
+        );
         return false;
       }
 
@@ -85,7 +97,11 @@ export class MailService {
     );
   }
 
-  async sendOrderConfirmation(email: string, orderNumber: string, total: string) {
+  async sendOrderConfirmation(
+    email: string,
+    orderNumber: string,
+    total: string,
+  ) {
     const webUrl = this.config.get<string>('webUrl');
     await this.send(
       email,
@@ -140,4 +156,4 @@ export class MailService {
       data.email,
     );
   }
-      }
+}

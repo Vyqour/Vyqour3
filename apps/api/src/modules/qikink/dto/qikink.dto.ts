@@ -104,4 +104,4 @@ export class MapQikinkSkuDto {
 
   @IsOptional()
   qikinkSearchFromMyProducts?: number;
-  }
+}

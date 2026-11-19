@@ -13,7 +13,11 @@ export class NewsletterService {
     if (existing) {
       return this.prisma.newsletterSubscriber.update({
         where: { id: existing.id },
-        data: { isActive: true, unsubscribedAt: null, subscribedAt: new Date() },
+        data: {
+          isActive: true,
+          unsubscribedAt: null,
+          subscribedAt: new Date(),
+        },
       });
     }
     return this.prisma.newsletterSubscriber.create({

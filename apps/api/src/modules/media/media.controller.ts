@@ -14,7 +14,10 @@ import { Role } from '@prisma/client';
 import { memoryStorage } from 'multer';
 import { MediaService } from './media.service';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
+import {
+  CurrentUser,
+  AuthUser,
+} from '../../common/decorators/current-user.decorator';
 
 @ApiTags('media')
 @ApiBearerAuth()
@@ -28,7 +31,10 @@ export class MediaController {
   @ApiBody({
     schema: {
       type: 'object',
-      properties: { file: { type: 'string', format: 'binary' }, folder: { type: 'string' } },
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        folder: { type: 'string' },
+      },
     },
   })
   @UseInterceptors(

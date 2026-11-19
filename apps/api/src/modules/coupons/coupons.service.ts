@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CouponType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { paginate, paginationMeta } from '../../common/dto/pagination.dto';
@@ -41,15 +45,22 @@ export class CouponsService {
   async list(page = 1, limit = 20) {
     const { skip, take } = paginate(page, limit);
     const [data, total] = await Promise.all([
-      this.prisma.coupon.findMany({ orderBy: { createdAt: 'desc' }, skip, take }),
+      this.prisma.coupon.findMany({
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
       this.prisma.coupon.count(),
     ]);
     return { data, meta: paginationMeta(total, page, limit) };
   }
 
   async validate(code: string, subtotal: number) {
-    const coupon = await this.prisma.coupon.findUnique({ where: { code: code.toUpperCase() } });
-    if (!coupon || !coupon.isActive) throw new NotFoundException('Invalid coupon');
+    const coupon = await this.prisma.coupon.findUnique({
+      where: { code: code.toUpperCase() },
+    });
+    if (!coupon || !coupon.isActive)
+      throw new NotFoundException('Invalid coupon');
     if (coupon.expiresAt < new Date() || coupon.startsAt > new Date()) {
       throw new NotFoundException('Coupon expired or not started');
     }
@@ -62,7 +73,8 @@ export class CouponsService {
     let discount = 0;
     if (coupon.type === 'PERCENTAGE') {
       discount = (subtotal * Number(coupon.value)) / 100;
-      if (coupon.maxDiscount) discount = Math.min(discount, Number(coupon.maxDiscount));
+      if (coupon.maxDiscount)
+        discount = Math.min(discount, Number(coupon.maxDiscount));
     } else if (coupon.type === 'FIXED') {
       discount = Math.min(Number(coupon.value), subtotal);
     }
@@ -74,7 +86,10 @@ export class CouponsService {
   }
 
   async remove(id: string) {
-    await this.prisma.coupon.update({ where: { id }, data: { isActive: false } });
+    await this.prisma.coupon.update({
+      where: { id },
+      data: { isActive: false },
+    });
     return { message: 'Coupon deactivated' };
   }
 }

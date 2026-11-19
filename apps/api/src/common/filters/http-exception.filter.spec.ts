@@ -1,4 +1,8 @@
-import { ArgumentsHost, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { AllExceptionsFilter } from './http-exception.filter';
 
 describe('AllExceptionsFilter', () => {
@@ -51,7 +55,8 @@ describe('AllExceptionsFilter', () => {
     const rawError = new Error(
       'Invalid `prisma.order.create()` invocation: password=hunter2 host=db.internal',
     );
-    rawError.stack = 'Error: password=hunter2\n    at Object.query (/app/node_modules/pg/lib/index.js:1)';
+    rawError.stack =
+      'Error: password=hunter2\n    at Object.query (/app/node_modules/pg/lib/index.js:1)';
 
     filter.catch(rawError, host);
 
