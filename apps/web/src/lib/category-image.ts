@@ -19,18 +19,38 @@ const CATEGORY_IMAGES: Record<string, string> = {
   'polo-t-shirts': UNSPLASH('photo-1586790170083-2f9ceadc732d'),
   polo: UNSPLASH('photo-1586790170083-2f9ceadc732d'),
   polos: UNSPLASH('photo-1586790170083-2f9ceadc732d'),
-  caps: UNSPLASH('photo-1588850561407-ed78c282e89b'),
-  cap: UNSPLASH('photo-1588850561407-ed78c282e89b'),
-  hats: UNSPLASH('photo-1588850561407-ed78c282e89b'),
-  'tote-bags': UNSPLASH('photo-1590874103328-eac38a683ce7'),
-  tote: UNSPLASH('photo-1590874103328-eac38a683ce7'),
-  totes: UNSPLASH('photo-1590874103328-eac38a683ce7'),
+  caps: '/images/accessories/caps.jpg',
+  cap: '/images/accessories/caps.jpg',
+  hats: '/images/accessories/caps.jpg',
+  'tote-bags': '/images/accessories/tote-bags.jpg',
+  tote: '/images/accessories/tote-bags.jpg',
+  totes: '/images/accessories/tote-bags.jpg',
   'phone-covers': UNSPLASH('photo-1601784551446-20c9e07cdbdb'),
   'phone-cover': UNSPLASH('photo-1601784551446-20c9e07cdbdb'),
   phonecovers: UNSPLASH('photo-1601784551446-20c9e07cdbdb'),
-  mugs: UNSPLASH('photo-1514228742587-6b1558fcca3d'),
-  mug: UNSPLASH('photo-1514228742587-6b1558fcca3d'),
-  drinkware: UNSPLASH('photo-1514228742587-6b1558fcca3d'),
+  mugs: '/images/accessories/mugs.jpg',
+  mug: '/images/accessories/mugs.jpg',
+  drinkware: '/images/accessories/drinkware.jpg',
+  'mouse-pads': '/images/accessories/mouse-pads.jpg',
+  'mouse-pad': '/images/accessories/mouse-pads.jpg',
+  mousepads: '/images/accessories/mouse-pads.jpg',
+  mousepad: '/images/accessories/mouse-pads.jpg',
+  scarves: '/images/accessories/scarves.jpg',
+  scarf: '/images/accessories/scarves.jpg',
+  stoles: '/images/accessories/stoles.jpg',
+  stole: '/images/accessories/stoles.jpg',
+  scrunchies: '/images/accessories/scrunchies.jpg',
+  scrunchie: '/images/accessories/scrunchies.jpg',
+  'dog-tags': '/images/accessories/dog-tags.jpg',
+  'dog-tag': '/images/accessories/dog-tags.jpg',
+  dogtags: '/images/accessories/dog-tags.jpg',
+  dogtag: '/images/accessories/dog-tags.jpg',
+  pendants: '/images/accessories/pendants.jpg',
+  pendant: '/images/accessories/pendants.jpg',
+  'personalized-pens': '/images/accessories/personalized-pens.jpg',
+  'personalized-pen': '/images/accessories/personalized-pens.jpg',
+  pens: '/images/accessories/personalized-pens.jpg',
+  pen: '/images/accessories/personalized-pens.jpg',
   stickers: UNSPLASH('photo-1611532736597-de2d4265fba3'),
   sticker: UNSPLASH('photo-1611532736597-de2d4265fba3'),
   posters: UNSPLASH('photo-1513519245088-0e12902e35ca'),
@@ -66,6 +86,10 @@ export function categoryImageUrl(nameOrSlug: string, size = 800): string {
     CATEGORY_IMAGES[`${key}s`] ||
     UNSPLASH('photo-1441986300917-64674bd600d8'); // generic apparel fallback
 
+  if (base.startsWith('/')) {
+    return base;
+  }
+
   if (size && size !== 800) {
     return base.replace(/w=\d+/, `w=${size}`);
   }
@@ -94,6 +118,16 @@ export function resolveCategoryImage(
   const url = (category.imageUrl || '').trim();
   const name = category.name || 'Category';
   const slug = category.slug || '';
+
+  // 1. If category matches a dedicated local image (e.g. accessories), always use it
+  const key = normalizeKey(slug || name);
+  const localImage =
+    CATEGORY_IMAGES[key] ||
+    CATEGORY_IMAGES[key.replace(/s$/, '')] ||
+    CATEGORY_IMAGES[`${key}s`];
+  if (localImage && localImage.startsWith('/')) {
+    return localImage;
+  }
 
   if (url && !isBlankOrPlaceholder(url)) {
     return url;

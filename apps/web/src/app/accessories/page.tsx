@@ -7,8 +7,23 @@ import type { Category, Paginated, Product } from '@/types';
 
 export const metadata = {
   title: 'Accessories',
-  description: 'Caps, totes, phone covers, mugs, stickers, posters and more from VYQOUR.',
+  description:
+    'Caps, tote bags, drinkware, mugs, mouse pads, scarves, stoles, scrunchies, dog tags, pendants, personalized pens and more from VYQOUR.',
 };
+
+const ACCESSORY_CATEGORIES = [
+  { name: 'Caps', slug: 'caps', image: '/images/accessories/caps.jpg' },
+  { name: 'Tote Bags', slug: 'tote-bags', image: '/images/accessories/tote-bags.jpg' },
+  { name: 'Drinkware', slug: 'drinkware', image: '/images/accessories/drinkware.jpg' },
+  { name: 'Mugs', slug: 'mugs', image: '/images/accessories/mugs.jpg' },
+  { name: 'Mouse Pads', slug: 'mouse-pads', image: '/images/accessories/mouse-pads.jpg' },
+  { name: 'Scarves', slug: 'scarves', image: '/images/accessories/scarves.jpg' },
+  { name: 'Stoles', slug: 'stoles', image: '/images/accessories/stoles.jpg' },
+  { name: 'Scrunchies', slug: 'scrunchies', image: '/images/accessories/scrunchies.jpg' },
+  { name: 'Dog Tags', slug: 'dog-tags', image: '/images/accessories/dog-tags.jpg' },
+  { name: 'Pendants', slug: 'pendants', image: '/images/accessories/pendants.jpg' },
+  { name: 'Personalized Pens', slug: 'personalized-pens', image: '/images/accessories/personalized-pens.jpg' },
+] as const;
 
 export default async function AccessoriesPage() {
   const categories = (await serverFetch<Category[]>('/categories')) || [];
@@ -17,24 +32,18 @@ export default async function AccessoriesPage() {
     accessoriesRoot?.children?.filter((c) => c.isActive !== false) ||
     (categories || []).filter((c) => c.parentId && c.isActive !== false);
 
-  // Prefer known accessory subcategories with images even if API tree is flat
-  const fallbackSubs = [
-    'Caps',
-    'Tote Bags',
-    'Phone Covers',
-    'Mugs',
-    'Stickers',
-    'Posters',
-    'Drinkware',
-  ].map((name, i) => ({
-    id: `fallback-${i}`,
-    name,
-    slug: name.toLowerCase().replace(/\s+/g, '-'),
-    imageUrl: null as string | null,
-    parentId: accessoriesRoot?.id || null,
-  }));
-
-  const subs = children.length ? children : fallbackSubs;
+  const subs = ACCESSORY_CATEGORIES.map((cat, i) => {
+    const match = children.find(
+      (c) => c.slug === cat.slug || c.name.toLowerCase() === cat.name.toLowerCase(),
+    );
+    return {
+      id: match?.id || `accessory-${cat.slug}-${i}`,
+      name: cat.name,
+      slug: cat.slug,
+      imageUrl: cat.image,
+      parentId: accessoriesRoot?.id || null,
+    };
+  });
 
   const groups = await Promise.all(
     subs.map(async (sub) => {
@@ -58,7 +67,7 @@ export default async function AccessoriesPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.25em] text-primary-glow">Details</p>
         <h1 className="mt-2 text-3xl font-medium md:text-4xl">Accessories</h1>
         <p className="mt-3 max-w-xl text-sm text-muted-foreground">
-          Caps, tote bags, drinkware, phone covers, mugs, stickers, posters — finish the look.
+          Caps, tote bags, drinkware, mugs, mouse pads, scarves, stoles, scrunchies, dog tags, pendants, personalized pens — finish the look.
         </p>
 
         <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 md:gap-4">
