@@ -641,7 +641,6 @@ Less is louder.`,
 
   console.log('✅ Seed complete');
   console.log(`   Admin: ${adminEmail} / ${adminPassword}`);
-  console.log('   Demo:  demo@vyqour.com / Demo@1234');
 }
 
 main()
