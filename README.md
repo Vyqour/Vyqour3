@@ -1,6 +1,6 @@
 # VYQOUR — Wear Your Identity.
 
-Premium Print-on-Demand fashion e-commerce platform for India (INR).
+Design-led fashion e-commerce platform for India (INR).
 
 **Stack:** Next.js 15 · NestJS · PostgreSQL · Prisma · Redis · JWT · Cloudinary · Razorpay-ready
 
@@ -11,7 +11,7 @@ Premium Print-on-Demand fashion e-commerce platform for India (INR).
 ```
 vyqour/
 ├── apps/
-│   ├── web/          # Next.js storefront + admin (Vercel)
+│   ├── web/          # Next.js storefront + admin (Netlify)
 │   └── api/          # NestJS REST API (Render)
 ├── docker-compose.yml
 ├── render.yaml
@@ -96,10 +96,7 @@ npm run db:seed
 ```
 
 Seed accounts:
-| Role | Email | Password |
-|------|-------|----------|
-| Super Admin | admin@vyqour.com | VyqourAdmin@2026 |
-| Demo customer | demo@vyqour.com | Demo@1234 |
+The seed script creates or updates the Super Admin account using `ADMIN_EMAIL` and `ADMIN_PASSWORD` environment variables. It does not publish default login credentials.
 
 Coupons: `VYQOUR10` · `FREESHIP` · `IDENTITY500`
 
@@ -122,10 +119,8 @@ npm run dev:web
 
 ## Deployment
 
-### Frontend → Vercel
-1. Import repo, root `apps/web`
-2. Env: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SITE_URL`
-3. Region: `bom1` (Mumbai) recommended
+### Frontend → Netlify
+The storefront is deployed on Netlify using the repository's `netlify.toml` configuration. Keep the repository root as the build base so npm workspaces resolve correctly. Set the required frontend environment variables in Netlify.
 
 ### Backend → Render
 1. Use `render.yaml` or connect `apps/api`
@@ -185,4 +180,4 @@ npm run dev:web
 
 ---
 
-Built as a production-ready foundation for VYQOUR POD commerce.
+Built for VYQOUR.
