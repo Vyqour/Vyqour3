@@ -206,7 +206,7 @@ export class QikinkApiClient {
           | string
           | number
           | undefined,
-        order_number: (row.order_number || row.number) as string | undefined,
+        order_number: (row.order_number || row.number || (row.qikink_order_id != null ? row.order_id : undefined)) as string | undefined,
         status: (row.status || row.order_status) as string | undefined,
         awb,
         tracking_number: awb,
