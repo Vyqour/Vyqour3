@@ -57,39 +57,6 @@ async function main() {
     },
   });
 
-  const demoUser = await prisma.user.upsert({
-    where: { email: 'demo@vyqour.com' },
-    update: {},
-    create: {
-      email: 'demo@vyqour.com',
-      passwordHash: await bcrypt.hash('Demo@1234', 12),
-      firstName: 'Aarav',
-      lastName: 'Mehta',
-      phone: '9876543210',
-      role: Role.CUSTOMER,
-      emailVerified: true,
-      emailVerifiedAt: new Date(),
-    },
-  });
-
-  await prisma.address.upsert({
-    where: { id: 'seed-address-demo' },
-    update: {},
-    create: {
-      id: 'seed-address-demo',
-      userId: demoUser.id,
-      fullName: 'Aarav Mehta',
-      phone: '9876543210',
-      line1: '12, Identity Lane',
-      line2: 'Bandra West',
-      city: 'Mumbai',
-      state: 'Maharashtra',
-      postalCode: '400050',
-      country: 'India',
-      isDefault: true,
-    },
-  });
-
   const categoryDefs = [
     { name: 'T-Shirts', slug: 't-shirts', description: 'Premium everyday tees' },
     { name: 'Hoodies', slug: 'hoodies', description: 'Heavyweight comfort' },
@@ -674,7 +641,6 @@ Less is louder.`,
 
   console.log('✅ Seed complete');
   console.log(`   Admin: ${adminEmail} / ${adminPassword}`);
-  console.log('   Demo:  demo@vyqour.com / Demo@1234');
 }
 
 main()
