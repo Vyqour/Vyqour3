@@ -94,7 +94,7 @@ export default () => ({
     statusPollEnabled:
       (process.env.QIKINK_STATUS_POLL_ENABLED || 'true').toLowerCase() ===
       'true',
-    statusEndpoint: process.env.QIKINK_STATUS_ENDPOINT || '/api/order/status',
+    statusEndpoint: process.env.QIKINK_STATUS_ENDPOINT || '/api/order',
     productsEndpoint: process.env.QIKINK_PRODUCTS_ENDPOINT || '/api/products',
   },
 });

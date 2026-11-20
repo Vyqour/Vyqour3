@@ -26,7 +26,7 @@ Checkout / Payment
        │
        ├── POST /api/token
        ├── POST /api/order/create
-       ├── GET  /api/order/status   (optional / account-dependent)
+       ├── GET  /api/order?id=...   (configurable; legacy single-order lookup)
        └── GET  /api/products       (optional / account-dependent)
 
 Inbound:
@@ -60,6 +60,7 @@ QIKINK_AUTO_SUBMIT=true
 QIKINK_MAX_ATTEMPTS=8
 QIKINK_WORKER_INTERVAL_MS=15000
 QIKINK_STATUS_POLL_ENABLED=true
+QIKINK_STATUS_ENDPOINT=/api/order    # legacy single-order status lookup; override per account
 
 # Payments (prepaid automation)
 RAZORPAY_KEY_ID=...
@@ -181,10 +182,10 @@ Updates:
 
 ### Polling (fallback)
 Cron every 30 minutes enqueues `SYNC_ORDER_STATUS` for open Qikink orders.  
-Calls configurable `QIKINK_STATUS_ENDPOINT` (default `/api/order/status`).  
+Calls configurable `QIKINK_STATUS_ENDPOINT` (default `/api/order`) with the Qikink order ID as `id`. The client accepts either a direct order object or a `{ data: [...] }` response and verifies returned identifiers before applying a status.  
 If endpoint is unavailable for the account, the job soft-skips (webhooks remain source of truth).
 
-**Limitation:** Public Postman collection does not fully specify status/list endpoints for all tenants. Webhooks + dashboard remain the reliable channel; polling is best-effort.
+**Limitation:** The public Qikink API reference does not fully specify status/list responses for every tenant. `/api/order/list` has returned server errors in the connected account, so the client now defaults to the legacy single-order route and allows `QIKINK_STATUS_ENDPOINT` overrides. Webhooks + dashboard remain the reliable channel; polling is best-effort.
 
 ---
 

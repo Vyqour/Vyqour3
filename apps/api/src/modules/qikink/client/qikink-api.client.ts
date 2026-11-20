@@ -127,8 +127,9 @@ export class QikinkApiClient {
   }
 
   /**
-   * Qikink API 08-25 documents GET /api/order/list (and legacy GET /api/order).
-   * Normalize its paginated data[] response to the shape used by the service.
+   * Qikink tenants may expose the legacy single-order endpoint instead of
+   * /api/order/list. Keep the path configurable and accept direct objects
+   * as well as the newer { data: [...] } response envelope.
    */
   async getOrderStatus(params: {
     orderId?: string | number;
@@ -136,13 +137,13 @@ export class QikinkApiClient {
     internalOrderId?: string;
     logToDatabase?: boolean;
   }): Promise<QikinkOrderStatusResponse | null> {
-    const endpoint = '/api/order/list';
+    const endpoint =
+      this.config.get<string>('qikink.statusEndpoint') || '/api/order';
     const qs = new URLSearchParams();
     if (params.orderId) qs.set('id', String(params.orderId));
     else if (params.orderNumber)
       qs.set('order_reference_no', String(params.orderNumber));
     else return null;
-    qs.set('params', 'order_id,number,status,shipping');
     try {
       const result = await this.request<unknown>(
         'GET',
@@ -153,37 +154,65 @@ export class QikinkApiClient {
         params.logToDatabase !== false,
       );
       if (!result || typeof result !== 'object') return null;
-      const envelope = result as {
-        success?: boolean;
-        data?: unknown;
-      };
-      if (envelope.success === false || !Array.isArray(envelope.data))
-        return null;
-      const rows = envelope.data as Array<Record<string, unknown>>;
-      // Never fall back to an unrelated first row. A wrong match could attach
-      // another customer's fulfilment status or tracking number to this order.
-      const row = rows.find((item) =>
-        params.orderId
-          ? String(item.order_id) === String(params.orderId)
-          : String(item.number || '').endsWith(
-              String(params.orderNumber || ''),
-            ),
-      );
+      const envelope = result as Record<string, unknown>;
+      if (envelope.success === false || envelope.error) return null;
+
+      const data = envelope.data;
+      const rows = Array.isArray(data)
+        ? (data as Array<Record<string, unknown>>)
+        : data && typeof data === 'object'
+          ? [data as Record<string, unknown>]
+          : Array.isArray(result)
+            ? (result as Array<Record<string, unknown>>)
+            : [envelope];
+
+      // Never attach a status or tracking number to a different order.
+      const row = rows.find((item) => {
+        if (params.orderId) {
+          const identifiers = [
+            item.qikink_order_id,
+            item.order_id,
+            item.id,
+          ].filter((value) => value != null);
+          return (
+            identifiers.length === 0 ||
+            identifiers.some(
+              (value) => String(value) === String(params.orderId),
+            )
+          );
+        }
+        const number = String(
+          item.order_number || item.number || item.order_reference_no || '',
+        );
+        return number.endsWith(String(params.orderNumber || ''));
+      });
       if (!row) return null;
       const shipping =
         row.shipping && typeof row.shipping === 'object'
           ? (row.shipping as Record<string, unknown>)
           : {};
+      const awb = (shipping.awb || row.awb || row.tracking_number) as
+        | string
+        | undefined;
+      const trackingLink = (shipping.tracking_link ||
+        row.tracking_link ||
+        row.tracking_url) as string | undefined;
+      const courier = (shipping.courier_provider_name ||
+        row.courier_provider_name ||
+        row.courier ||
+        row.carrier) as string | undefined;
       return {
-        order_id: row.order_id as string | number | undefined,
-        order_number: row.number as string | undefined,
-        status: row.status as string | undefined,
-        awb: shipping.awb as string | undefined,
-        tracking_number: shipping.awb as string | undefined,
-        tracking_link: shipping.tracking_link as string | undefined,
-        courier_provider_name: shipping.courier_provider_name as
-          string | undefined,
-        courier: shipping.courier_provider_name as string | undefined,
+        order_id: (row.qikink_order_id || row.order_id || row.id) as
+          | string
+          | number
+          | undefined,
+        order_number: (row.order_number || row.number || (row.qikink_order_id != null ? row.order_id : undefined)) as string | undefined,
+        status: (row.status || row.order_status) as string | undefined,
+        awb,
+        tracking_number: awb,
+        tracking_link: trackingLink,
+        courier_provider_name: courier,
+        courier,
         shipping_type: row.shipping_type as string | undefined,
         payment_type: row.payment_type as string | undefined,
         raw: row,
@@ -195,7 +224,6 @@ export class QikinkApiClient {
       return null;
     }
   }
-
   /**
    * Optional product list endpoint for catalog sync.
    * Public docs emphasize order create; product listing may require Live API access.
