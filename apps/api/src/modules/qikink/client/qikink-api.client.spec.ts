@@ -20,6 +20,7 @@ describe('QikinkApiClient', () => {
           'qikink.clientId': 'test-client',
           'qikink.clientSecret': 'test-secret',
           'qikink.sandbox': false,
+          'qikink.statusEndpoint': '/api/order',
         };
         return values[key] ?? null;
       }),
@@ -78,7 +79,7 @@ describe('QikinkApiClient', () => {
     );
   });
 
-  it('uses the documented order list endpoint and normalizes shipping tracking fields', async () => {
+  it('uses the configured single-order endpoint and normalizes list-envelope tracking fields', async () => {
     global.fetch = jest
       .fn()
       .mockResolvedValueOnce({
@@ -113,7 +114,7 @@ describe('QikinkApiClient', () => {
       internalOrderId: 'internal-1',
     });
     expect(global.fetch).toHaveBeenLastCalledWith(
-      expect.stringContaining('/api/order/list?id=123'),
+      expect.stringContaining('/api/order?id=123'),
       expect.any(Object),
     );
     expect(result).toEqual(
@@ -126,6 +127,74 @@ describe('QikinkApiClient', () => {
         courier: 'Bluedart Surface',
       }),
     );
+  });
+
+
+  it('normalizes a legacy direct order response returned by the sandbox endpoint', async () => {
+    mockConfig.get.mockImplementation((key: string) => {
+      const values: Record<string, unknown> = {
+        'qikink.baseUrl': 'https://sandbox.qikink.com',
+        'qikink.clientId': 'sandbox-client',
+        'qikink.clientSecret': 'live-secret-unused',
+        'qikink.sandboxSecret': 'sandbox-secret',
+        'qikink.sandbox': true,
+        'qikink.statusEndpoint': '/api/order',
+      };
+      return values[key] ?? null;
+    });
+    client = new QikinkApiClient(
+      mockConfig as ConfigService,
+      mockPrisma as PrismaService,
+    );
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({ Accesstoken: 'sandbox-token', expires_in: 3600 }),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            order_id: 'VYQ123456',
+            qikink_order_id: 123,
+            status: 'In-Transit',
+            tracking_number: '77908747221',
+            tracking_url: 'https://tracking.example/77908747221',
+            courier: 'Bluedart',
+          }),
+      } as unknown as Response);
+
+    const result = await client.getOrderStatus({
+      orderId: 123,
+      logToDatabase: false,
+    });
+
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      'https://sandbox.qikink.com/api/order?id=123',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          ClientId: 'sandbox-client',
+          Accesstoken: 'sandbox-token',
+        }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        order_id: 123,
+        order_number: 'VYQ123456',
+        status: 'In-Transit',
+        awb: '77908747221',
+        tracking_number: '77908747221',
+        tracking_link: 'https://tracking.example/77908747221',
+        courier: 'Bluedart',
+      }),
+    );
+    expect(mockPrisma.qikinkApiLog.create).not.toHaveBeenCalled();
   });
 
   it('does not return an unrelated first row when the requested Qikink order ID is absent', async () => {
